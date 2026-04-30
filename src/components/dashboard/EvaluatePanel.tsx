@@ -115,10 +115,12 @@ export function EvaluatePanel({ patient }: Props) {
   const showCgm = shouldShowCgmBlock(patient.serving);
   const showIp = shouldShowIpBlock(patient.serving);
 
-  // Pre-fill IP coverage path from Serving (Supplies Only locks it)
+  // Pre-fill IP coverage path from Serving on initial load if nothing is set
+  // yet. Once the rep picks a path we leave it alone — this used to clobber
+  // every edit when Serving was "Supplies Only" / "Supplies + CGM".
   useEffect(() => {
     const def = defaultIpPath(patient.serving);
-    if (def && state.ipCoveragePath !== def) {
+    if (def && state.ipCoveragePath === undefined) {
       setState((s) => ({ ...s, ipCoveragePath: def }));
     }
   }, [patient.serving, state.ipCoveragePath]);
