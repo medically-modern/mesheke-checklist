@@ -7,13 +7,21 @@ const POLL_MS = 30_000;
 
 export type TabKey = "evaluate" | "sendRequest" | "confirmReceipt" | "chase";
 
-// Sub-Stage text values that map to each tab
-const SUB_STAGE_FILTER: Record<TabKey, string> = {
-  evaluate: "2A. Evaluate Medical Necessity",
-  sendRequest: "2B. Send Request",
-  confirmReceipt: "2C. Confirm Receipt",
-  chase: "2D. Chase Clinicals",
+// Stage Advancer text values that map to each tab. Multiple acceptable values
+// per tab so we tolerate label changes on the Monday board (the column was
+// renamed from "Sub-Stage" / "2A. Evaluate Medical Necessity" to "Stage
+// Advancer" / "Evaluate MN").
+const SUB_STAGE_FILTER: Record<TabKey, string[]> = {
+  evaluate: ["Evaluate MN", "2A. Evaluate Medical Necessity"],
+  sendRequest: ["Send Request", "2B. Send Request"],
+  confirmReceipt: ["Confirm Receipt", "2C. Confirm Receipt"],
+  chase: ["Chase Clinicals", "2D. Chase Clinicals"],
 };
+
+function matchesTab(subStage: string | undefined, tab: TabKey): boolean {
+  if (!subStage) return false;
+  return SUB_STAGE_FILTER[tab].some((label) => subStage === label);
+}
 
 export function useMondayPatients(activeTab: TabKey = "evaluate") {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -41,9 +49,8 @@ export function useMondayPatients(activeTab: TabKey = "evaluate") {
       const safeItems = Array.isArray(items) ? items : [];
       const allPatients = safeItems.map(mondayItemToPatient);
 
-      // Filter to patients whose sub-stage matches this tab
-      const filterText = SUB_STAGE_FILTER[activeTab];
-      const filtered = allPatients.filter((p) => p.subStage === filterText);
+      // Filter to patients whose Stage Advancer matches this tab
+      const filtered = allPatients.filter((p) => matchesTab(p.subStage, activeTab));
 
       const merged = filtered.map((p) => {
         const o = overlayRef.current.get(p.id);
