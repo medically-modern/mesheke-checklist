@@ -7,20 +7,17 @@ const POLL_MS = 30_000;
 
 export type TabKey = "evaluate" | "sendRequest" | "confirmReceipt" | "chase";
 
-// Stage Advancer text values that map to each tab. Multiple acceptable values
-// per tab so we tolerate label changes on the Monday board (the column was
-// renamed from "Sub-Stage" / "2A. Evaluate Medical Necessity" to "Stage
-// Advancer" / "Evaluate MN").
-const SUB_STAGE_FILTER: Record<TabKey, string[]> = {
-  evaluate: ["Evaluate MN", "2A. Evaluate Medical Necessity"],
-  sendRequest: ["Send Request", "2B. Send Request"],
-  confirmReceipt: ["Confirm Receipt", "2C. Confirm Receipt"],
-  chase: ["Chase Clinicals", "2D. Chase Clinicals"],
+// Stage Advancer (color_mm1wyr92) text values that map to each tab.
+const SUB_STAGE_FILTER: Record<TabKey, string> = {
+  evaluate: "Evaluate MN",
+  sendRequest: "Send Request",
+  confirmReceipt: "Confirm Receipt",
+  chase: "Chase Clinicals",
 };
 
-function matchesTab(subStage: string | undefined, tab: TabKey): boolean {
-  if (!subStage) return false;
-  return SUB_STAGE_FILTER[tab].some((label) => subStage === label);
+function matchesTab(stageAdvancer: string | undefined, tab: TabKey): boolean {
+  if (!stageAdvancer) return false;
+  return stageAdvancer === SUB_STAGE_FILTER[tab];
 }
 
 export function useMondayPatients(activeTab: TabKey = "evaluate") {
