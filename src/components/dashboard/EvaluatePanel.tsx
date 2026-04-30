@@ -58,6 +58,7 @@ import {
   hasToken,
   writeDate,
   writeDropdownLabels,
+  writeLongText,
   writeStatusIndex,
   writeStatusLabel,
   type MondayFileEntry,
@@ -314,6 +315,10 @@ export function EvaluatePanel({ patient }: Props) {
           COL.generalMnInvalidReasons,
           preview.generalMnInvalidReasons,
         ),
+    });
+    tasks.push({
+      label: "MN Evaluation Notes",
+      run: () => writeLongText(patient.id, COL.mnEvalNotes, state.notes ?? ""),
     });
 
     const results = await Promise.allSettled(tasks.map((t) => t.run()));
