@@ -247,6 +247,7 @@ export interface MondayPreview {
   lastVisitDate?: string;
   mrExpiryDate?: string;
   medicalNecessity: "Established" | "Not Established";
+  generalMnInvalidReasons: string[];
   cgmMnInvalidReasons: string[];
   ipMnInvalidReasons: string[];
   generateCgmScript?: string;
@@ -258,15 +259,6 @@ export function buildMondayPreview(
   validity: ValidityResult,
 ): MondayPreview {
   const { expiry } = getMrExpiry(state.lastVisitDate);
-  // General reasons (Diagnosis missing, MR not received, MR expired, Last Visit
-  // not set) are mirrored into both CGM and IP invalid-reason columns when
-  // those sections are being served.
-  const cgmCombined = validity.sections.cgm.shown
-    ? [...validity.cgmReasons, ...validity.generalReasons]
-    : [];
-  const ipCombined = validity.sections.ip.shown
-    ? [...validity.ipReasons, ...validity.generalReasons]
-    : [];
   return {
     ipCoveragePath: state.ipCoveragePath,
     cgmCoveragePath: state.cgmCoveragePath,
@@ -275,8 +267,9 @@ export function buildMondayPreview(
     lastVisitDate: state.lastVisitDate,
     mrExpiryDate: expiry ? expiry.toISOString().slice(0, 10) : undefined,
     medicalNecessity: validity.established ? "Established" : "Not Established",
-    cgmMnInvalidReasons: cgmCombined,
-    ipMnInvalidReasons: ipCombined,
+    generalMnInvalidReasons: validity.generalReasons,
+    cgmMnInvalidReasons: validity.sections.cgm.shown ? validity.cgmReasons : [],
+    ipMnInvalidReasons: validity.sections.ip.shown ? validity.ipReasons : [],
     generateCgmScript: state.generateCgmScript,
     generateIpScript: state.generateIpScript,
   };

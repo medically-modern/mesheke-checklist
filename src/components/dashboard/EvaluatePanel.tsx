@@ -126,7 +126,13 @@ export function EvaluatePanel({ patient }: Props) {
 
   const preview = useMemo(() => buildMondayPreview(state, validity), [state, validity]);
 
-  const mondayFiles = useMondayFiles(patient.id);
+  // Poll Monday's file columns every 2s while the rep is waiting on a generated
+  // script template. Silent (no loading flicker) after the initial fetch.
+  const isGenerating =
+    state.generateCgmScript === "Generate" || state.generateIpScript === "Generate";
+  const mondayFiles = useMondayFiles(patient.id, {
+    pollingIntervalMs: isGenerating ? 2000 : 0,
+  });
 
   return (
     <div className="space-y-4">
@@ -191,7 +197,6 @@ export function EvaluatePanel({ patient }: Props) {
               value={state.generateCgmScript}
               onChange={(v) => update("generateCgmScript", v)}
               templateAvailable={mondayFiles.cgmTemplate.length > 0}
-              onTick={mondayFiles.refetch}
             />
             <MondayScriptViewer
               label="CGM script template"
@@ -228,7 +233,6 @@ export function EvaluatePanel({ patient }: Props) {
               value={state.generateIpScript}
               onChange={(v) => update("generateIpScript", v)}
               templateAvailable={mondayFiles.ipTemplate.length > 0}
-              onTick={mondayFiles.refetch}
             />
             <MondayScriptViewer
               label="Insulin Pump script template"
@@ -597,7 +601,6 @@ interface GenerateScriptToggleProps {
   value?: string;
   onChange: (v: string | undefined) => void;
   templateAvailable: boolean; // true once Monday's template column has a file
-  onTick?: () => void; // called periodically while generating to refresh Monday state
 }
 
 const GENERATE_MIN_WAIT_MS = 10_000;
@@ -607,7 +610,6 @@ function GenerateScriptToggle({
   value,
   onChange,
   templateAvailable,
-  onTick,
 }: GenerateScriptToggleProps) {
   const isGenerating = value === "Generate";
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -622,17 +624,16 @@ function GenerateScriptToggle({
     if (startedAt === null) setStartedAt(Date.now());
   }, [isGenerating, startedAt]);
 
-  // While generating: tick every 1.5s to re-render and re-poll Monday for the
-  // template file. Auto-revert as soon as both 10s have elapsed AND the
-  // template has appeared.
+  // While generating: re-render once after the 10s minimum-wait elapses so the
+  // auto-revert effect below can re-evaluate. Polling for Monday's template
+  // file lives in useMondayFiles (silent — no spinner flicker).
   useEffect(() => {
-    if (!isGenerating) return;
-    const id = setInterval(() => {
-      forceTick((t) => t + 1);
-      onTick?.();
-    }, 1500);
-    return () => clearInterval(id);
-  }, [isGenerating, onTick]);
+    if (!isGenerating || startedAt === null) return;
+    const elapsed = Date.now() - startedAt;
+    if (elapsed >= GENERATE_MIN_WAIT_MS) return;
+    const id = setTimeout(() => forceTick((t) => t + 1), GENERATE_MIN_WAIT_MS - elapsed);
+    return () => clearTimeout(id);
+  }, [isGenerating, startedAt]);
 
   useEffect(() => {
     if (!isGenerating || startedAt === null) return;
@@ -970,6 +971,7 @@ function MondayPreviewPanel({ preview }: { preview: ReturnType<typeof buildMonda
                 : "text-red-700 font-medium"
             }
           />
+          <ReasonsRow label="General MN Invalid Reasons" reasons={preview.generalMnInvalidReasons} />
           <ReasonsRow label="CGM MN Invalid Reasons" reasons={preview.cgmMnInvalidReasons} />
           <ReasonsRow label="Insulin Pump MN Invalid Reasons" reasons={preview.ipMnInvalidReasons} />
           {preview.generateCgmScript && (
