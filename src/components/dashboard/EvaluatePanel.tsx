@@ -26,7 +26,7 @@ import {
   LMN_OPTS,
   IP_PATH_OPTS,
   DIAGNOSIS_LIST,
-  GEN_SCRIPT_OPTS,
+  GEN_SCRIPT_SIMPLE_OPTS,
 } from "@/lib/fieldOptions";
 import {
   IP_PATH_FIELDS,
@@ -164,7 +164,7 @@ export function EvaluatePanel({ patient }: Props) {
           title="CGM"
           status={validity.sections.cgm.shown ? validity.sections.cgm.valid : null}
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
             <StatusSelect
               label="Valid CGM Script"
               value={state.cgmScriptValid}
@@ -177,11 +177,18 @@ export function EvaluatePanel({ patient }: Props) {
               options={CGM_COVERAGE_OPTS}
               onChange={(v) => update("cgmCoveragePath", v as CgmCoveragePath)}
             />
+          </div>
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 items-center">
             <StatusSelect
               label="Generate CGM Script"
               value={state.generateCgmScript}
-              options={GEN_SCRIPT_OPTS}
+              options={GEN_SCRIPT_SIMPLE_OPTS}
               onChange={(v) => update("generateCgmScript", v)}
+            />
+            <ScriptFileWidget
+              file={state.cgmScriptFile}
+              onAdd={(f) => update("cgmScriptFile", f)}
+              onRemove={() => update("cgmScriptFile", undefined)}
             />
           </div>
         </SectionCard>
@@ -193,7 +200,7 @@ export function EvaluatePanel({ patient }: Props) {
           title="Insulin Pump"
           status={validity.sections.ip.shown ? validity.sections.ip.valid : null}
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 mb-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 mb-2">
             <StatusSelect
               label="IP Coverage Path"
               value={state.ipCoveragePath}
@@ -206,11 +213,18 @@ export function EvaluatePanel({ patient }: Props) {
               options={VALID_INVALID_OPTS}
               onChange={(v) => update("ipScriptValid", v as ValidInvalid)}
             />
+          </div>
+          <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 items-center">
             <StatusSelect
               label="Generate IP Script"
               value={state.generateIpScript}
-              options={GEN_SCRIPT_OPTS}
+              options={GEN_SCRIPT_SIMPLE_OPTS}
               onChange={(v) => update("generateIpScript", v)}
+            />
+            <ScriptFileWidget
+              file={state.ipScriptFile}
+              onAdd={(f) => update("ipScriptFile", f)}
+              onRemove={() => update("ipScriptFile", undefined)}
             />
           </div>
 
@@ -489,6 +503,10 @@ interface DiagnosisFieldProps {
 
 function DiagnosisField({ value, onChange }: DiagnosisFieldProps) {
   const [open, setOpen] = useState(false);
+  // Override the default Command "selected" highlight (which is dark/white) with
+  // a light emerald that keeps text readable on hover/keyboard focus.
+  const itemClass =
+    "text-xs cursor-pointer text-foreground data-[selected=true]:bg-emerald-100 data-[selected=true]:text-emerald-900 aria-selected:bg-emerald-100 aria-selected:text-emerald-900";
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50">
       <span className="text-sm text-muted-foreground whitespace-nowrap">Diagnosis</span>
@@ -501,7 +519,7 @@ function DiagnosisField({ value, onChange }: DiagnosisFieldProps) {
             className={cn(
               "w-[160px] h-8 px-3 text-xs font-medium justify-between",
               value
-                ? "border-violet-200 bg-violet-50 hover:bg-violet-50/80"
+                ? "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-50/80 hover:text-emerald-900"
                 : "border-muted",
             )}
           >
@@ -515,6 +533,18 @@ function DiagnosisField({ value, onChange }: DiagnosisFieldProps) {
             <CommandList>
               <CommandEmpty>No code found.</CommandEmpty>
               <CommandGroup>
+                <CommandItem
+                  key="__none__"
+                  value="(none)"
+                  onSelect={() => {
+                    onChange("");
+                    setOpen(false);
+                  }}
+                  className={itemClass + " text-muted-foreground italic"}
+                >
+                  <X className="mr-2 h-3 w-3" />
+                  (none)
+                </CommandItem>
                 {DIAGNOSIS_LIST.map((code) => (
                   <CommandItem
                     key={code}
@@ -523,7 +553,7 @@ function DiagnosisField({ value, onChange }: DiagnosisFieldProps) {
                       onChange(code === value ? "" : code);
                       setOpen(false);
                     }}
-                    className="text-xs cursor-pointer"
+                    className={itemClass}
                   >
                     <Check
                       className={cn(
@@ -540,6 +570,76 @@ function DiagnosisField({ value, onChange }: DiagnosisFieldProps) {
         </PopoverContent>
       </Popover>
     </div>
+  );
+}
+
+interface ScriptFileWidgetProps {
+  file?: LocalFile;
+  onAdd: (file: LocalFile) => void;
+  onRemove: () => void;
+}
+
+function ScriptFileWidget({ file, onAdd, onRemove }: ScriptFileWidgetProps) {
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleFiles = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const f = fileList[0]; // single file only
+    onAdd({ name: f.name, size: f.size, addedAt: new Date().toISOString() });
+  };
+
+  const onDrop = (e: DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    handleFiles(e.dataTransfer.files);
+  };
+
+  if (file) {
+    return (
+      <div className="flex items-center justify-between gap-2 px-3 h-9 rounded-md border bg-emerald-50 border-emerald-200">
+        <span className="flex items-center gap-2 truncate text-xs text-emerald-900">
+          <FileText className="h-3 w-3 shrink-0" />
+          <span className="truncate font-medium">{file.name}</span>
+          <span className="text-emerald-700/70 shrink-0">
+            {(file.size / 1024).toFixed(1)} KB
+          </span>
+        </span>
+        <button
+          onClick={onRemove}
+          className="text-emerald-800 hover:text-red-600 shrink-0"
+          aria-label="Remove file"
+          title="Remove file"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <label
+      onDragOver={(e) => {
+        e.preventDefault();
+        setIsDragOver(true);
+      }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={onDrop}
+      className={cn(
+        "flex items-center justify-center gap-2 h-9 rounded-md border-2 border-dashed cursor-pointer transition-colors text-xs",
+        isDragOver
+          ? "border-emerald-400 bg-emerald-50 text-emerald-800"
+          : "border-muted bg-background text-muted-foreground hover:bg-muted/30",
+      )}
+    >
+      <Upload className="h-3 w-3" />
+      <span>Drop generated PDF or browse</span>
+      <input
+        type="file"
+        className="hidden"
+        accept=".pdf,application/pdf"
+        onChange={(e) => handleFiles(e.target.files)}
+      />
+    </label>
   );
 }
 

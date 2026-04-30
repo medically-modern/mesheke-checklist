@@ -139,6 +139,11 @@ export const IP_PATH_OPTS: StatusOption[] = [
   { label: "IW New Insurance", index: 5 },
 ];
 
+// Generate Script — Evaluate tab uses just "Generate" (blank by default)
+export const GEN_SCRIPT_SIMPLE_OPTS: StatusOption[] = [
+  { label: "Generate", index: 0 },
+];
+
 // Diagnosis dropdown — same ICD list, just sorted alphabetically for the new UI
 export const DIAGNOSIS_LIST: string[] = DIAGNOSIS_OPTS
   .filter((o) => o.label !== "Evaluate" && o.label !== "Collect")
