@@ -219,23 +219,19 @@ export interface MondayAsset {
 
 export async function fetchItemAssets(itemId: string): Promise<MondayAsset[]> {
   const query = `
-    query ($boardId: ID!, $itemId: ID!) {
-      boards(ids: [$boardId]) {
-        items_page(query_params: { ids: [$itemId] }) {
-          items {
-            assets(assets_source: all) {
-              id
-              name
-              url
-              public_url
-            }
-          }
+    query ($itemId: [ID!]!) {
+      items(ids: $itemId) {
+        assets(assets_source: all) {
+          id
+          name
+          url
+          public_url
         }
       }
     }
   `;
   const data = await gql<{
-    boards: { items_page: { items: { assets: MondayAsset[] }[] } }[];
-  }>(query, { boardId: BOARD_ID, itemId });
-  return data.boards?.[0]?.items_page?.items?.[0]?.assets ?? [];
+    items: { assets: MondayAsset[] }[];
+  }>(query, { itemId: [itemId] });
+  return data.items?.[0]?.assets ?? [];
 }
