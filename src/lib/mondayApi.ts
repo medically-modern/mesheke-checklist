@@ -194,6 +194,13 @@ export async function writeStatusIndex(itemId: string, columnId: string, index: 
   await gql(`mutation { change_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${JSON.stringify(value)}) { id } }`);
 }
 
+/** Clear a status column (sets it to no value / blank). */
+export async function clearStatusColumn(itemId: string, columnId: string): Promise<void> {
+  // Empty JSON object clears the status column
+  const value = JSON.stringify("");
+  await gql(`mutation { change_simple_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${value}) { id } }`);
+}
+
 export async function writeText(itemId: string, columnId: string, text: string): Promise<void> {
   const value = JSON.stringify(text);
   await gql(`mutation { change_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${JSON.stringify(value)}) { id } }`);

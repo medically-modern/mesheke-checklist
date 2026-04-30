@@ -53,6 +53,7 @@ import {
 import { useMondayFiles } from "@/hooks/useMondayFiles";
 import {
   COL,
+  clearStatusColumn,
   deleteFileFromColumn,
   hasToken,
   writeStatusIndex,
@@ -128,8 +129,10 @@ export function EvaluatePanel({ patient }: Props) {
   };
 
   // Generate button handlers — write the Monday status column so the
-  // DocExport automation actually runs. On auto-revert (after 10s + template
-  // appears), reset the column to "Ready" so the next click can retrigger.
+  // DocExport automation actually runs. The automation fires on a *change*
+  // event, so if the column happens to already be on "Generate", a plain set
+  // won't trigger it. We clear the column to blank first, wait briefly, then
+  // set to "Generate" — guarantees the change event fires.
   const triggerGenerate = useCallback(
     async (
       stateKey: "generateCgmScript" | "generateIpScript",
@@ -138,9 +141,16 @@ export function EvaluatePanel({ patient }: Props) {
     ) => {
       update(stateKey, v);
       if (!hasToken()) return;
-      const idx = v === "Generate" ? GEN_SCRIPT_STATUS.generate : GEN_SCRIPT_STATUS.ready;
       try {
-        await writeStatusIndex(patient.id, columnId, idx);
+        if (v === "Generate") {
+          // 1) clear → 2) set Generate
+          await clearStatusColumn(patient.id, columnId);
+          await new Promise((r) => setTimeout(r, 250));
+          await writeStatusIndex(patient.id, columnId, GEN_SCRIPT_STATUS.generate);
+        } else {
+          // Auto-revert / cancel: clear so the next click can re-trigger
+          await clearStatusColumn(patient.id, columnId);
+        }
       } catch (e) {
         toast.error(
           v === "Generate"
