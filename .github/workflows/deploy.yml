@@ -30,7 +30,7 @@ jobs:
       - name: Build
         env:
           VITE_MONDAY_API_TOKEN: ${{ secrets.VITE_MONDAY_API_TOKEN }}
-        run: npx vite build --base=/Samantha-checklist/
+        run: npx vite build --base=/mesheke-checklist/
 
       - name: Copy 404
         run: cp dist/index.html dist/404.html
