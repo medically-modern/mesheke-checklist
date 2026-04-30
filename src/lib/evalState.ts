@@ -274,8 +274,14 @@ export function buildMondayPreview(
 ): MondayPreview {
   const { expiry } = getMrExpiry(state.lastVisitDate);
   return {
-    ipCoveragePath: state.ipCoveragePath,
-    cgmCoveragePath: state.cgmCoveragePath,
+    // When a patient isn't being served that product, the preview reflects
+    // what'll be written to Monday: "Not Serving".
+    ipCoveragePath: validity.sections.ip.shown
+      ? state.ipCoveragePath
+      : "Not Serving",
+    cgmCoveragePath: validity.sections.cgm.shown
+      ? state.cgmCoveragePath
+      : "Not Serving",
     diagnosis: state.diagnosis,
     mrsClinicals: state.mrReceived === "Yes" ? "MR Received" : "Collect",
     lastVisitDate: state.lastVisitDate,

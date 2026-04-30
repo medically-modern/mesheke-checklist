@@ -1244,16 +1244,18 @@ function MondayPreviewPanel({ preview }: { preview: ReturnType<typeof buildMonda
 }
 
 function getBadgeClass(label: string, value: string): string | null {
+  // "Not Serving" — light green, distinct from the "valid"/"established" green.
+  if (value === "Not Serving") {
+    return "bg-lime-100 text-lime-800 border-lime-300";
+  }
   // CGM Coverage Path: Insulin dark blue, Hypo light blue
   if (label === "CGM Coverage Path") {
     if (value === "Insulin") return "bg-blue-100 text-blue-900 border-blue-300";
     if (value === "Hypo") return "bg-sky-100 text-sky-900 border-sky-300";
     if (value === "Invalid") return "bg-red-100 text-red-900 border-red-300";
-    if (value === "Not Serving") return "bg-gray-100 text-gray-700 border-gray-300";
   }
-  // Insulin Pump Coverage Path: subtle indigo for paths, gray for Not Serving
+  // Insulin Pump Coverage Path: subtle indigo for paths.
   if (label === "Insulin Pump Coverage Path") {
-    if (value === "Not Serving") return "bg-gray-100 text-gray-700 border-gray-300";
     return "bg-indigo-100 text-indigo-900 border-indigo-300";
   }
   // MRs / Clinicals: green for received, orange for collect
