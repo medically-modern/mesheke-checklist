@@ -903,23 +903,10 @@ function FileUploadCard({
           {mondayFiles.map((f) => (
             <li
               key={f.assetId}
-              className="flex items-center justify-between gap-2 text-xs bg-emerald-50 border border-emerald-200 rounded px-2 py-1"
+              className="flex items-center gap-2 text-xs bg-emerald-50 border border-emerald-200 rounded px-2 py-1 text-emerald-900"
             >
-              <span className="flex items-center gap-2 truncate text-emerald-900">
-                <FileText className="h-3 w-3 shrink-0" />
-                <span className="truncate font-medium">{f.name}</span>
-              </span>
-              <button
-                onClick={() => {
-                  const u = f.public_url || f.url;
-                  if (u) window.open(u, "_blank");
-                }}
-                disabled={!f.public_url && !f.url}
-                className="inline-flex items-center gap-1 text-[11px] text-emerald-800 hover:text-emerald-700"
-                title="View"
-              >
-                <ExternalLink className="h-3 w-3" /> View
-              </button>
+              <FileText className="h-3 w-3 shrink-0" />
+              <span className="truncate font-medium">{f.name}</span>
             </li>
           ))}
         </ul>
