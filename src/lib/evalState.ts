@@ -53,7 +53,12 @@ export function loadEvalState(patientId: string): EvalState {
   try {
     const raw = localStorage.getItem(STORAGE_PREFIX + patientId);
     if (!raw) return {};
-    return JSON.parse(raw) as EvalState;
+    const parsed = JSON.parse(raw) as EvalState;
+    // Strip any stale "Generate" trigger values that may have been persisted
+    // before we made these fields ephemeral.
+    delete parsed.generateCgmScript;
+    delete parsed.generateIpScript;
+    return parsed;
   } catch {
     return {};
   }
@@ -62,7 +67,17 @@ export function loadEvalState(patientId: string): EvalState {
 export function saveEvalState(patientId: string, state: EvalState): void {
   if (typeof localStorage === "undefined") return;
   try {
-    localStorage.setItem(STORAGE_PREFIX + patientId, JSON.stringify(state));
+    // Strip transient "Generate" trigger fields — they are tied to a single
+    // in-flight DocExport run and should not survive a reload. Otherwise the
+    // toggle stays stuck on "Generating…" forever.
+    const {
+      generateCgmScript: _gcgm,
+      generateIpScript: _gip,
+      ...persistable
+    } = state;
+    void _gcgm;
+    void _gip;
+    localStorage.setItem(STORAGE_PREFIX + patientId, JSON.stringify(persistable));
   } catch {
     // Storage may be full or disabled — fail silently.
   }
