@@ -914,16 +914,15 @@ function ValiditySummary({ validity, preview, onClearLocal }: ValiditySummaryPro
 
       {/* Section pills + MN status */}
       <div className="flex items-center gap-2 flex-wrap">
-        <SectionPill label="CGM" status={validity.sections.cgm} />
+        <SectionPill
+          label="General"
+          status={{
+            shown: true,
+            valid: validity.sections.diagnosis.valid && validity.sections.mr.valid,
+          }}
+        />
         <SectionPill label="Insulin Pump" status={validity.sections.ip} />
-        <SectionPill
-          label="Diagnosis"
-          status={{ shown: true, valid: validity.sections.diagnosis.valid }}
-        />
-        <SectionPill
-          label="MR"
-          status={{ shown: true, valid: validity.sections.mr.valid }}
-        />
+        <SectionPill label="CGM" status={validity.sections.cgm} />
         <span className="text-sm ml-1">
           →{" "}
           {validity.established ? (
