@@ -50,6 +50,8 @@ import {
   type ValidInvalid,
   type YesNo,
 } from "@/lib/evalState";
+import { useMondayFiles } from "@/hooks/useMondayFiles";
+import type { MondayFileEntry } from "@/lib/mondayApi";
 import {
   Check,
   X,
@@ -60,6 +62,9 @@ import {
   RotateCcw,
   ChevronsUpDown,
   AlertTriangle,
+  Download,
+  ExternalLink,
+  Loader2,
 } from "lucide-react";
 
 interface Props {
@@ -120,6 +125,8 @@ export function EvaluatePanel({ patient }: Props) {
   );
 
   const preview = useMemo(() => buildMondayPreview(state, validity), [state, validity]);
+
+  const mondayFiles = useMondayFiles(patient.id);
 
   return (
     <div className="space-y-4">
@@ -183,8 +190,14 @@ export function EvaluatePanel({ patient }: Props) {
               label="Generate CGM Script"
               value={state.generateCgmScript}
               onChange={(v) => update("generateCgmScript", v)}
+              templateAvailable={mondayFiles.cgmTemplate.length > 0}
+              onTick={mondayFiles.refetch}
             />
-            <MondayScriptViewer label="CGM script template" file={null} />
+            <MondayScriptViewer
+              label="CGM script template"
+              files={mondayFiles.cgmTemplate}
+              loading={mondayFiles.loading}
+            />
           </div>
         </SectionCard>
       )}
@@ -214,8 +227,14 @@ export function EvaluatePanel({ patient }: Props) {
               label="Generate Insulin Pump Script"
               value={state.generateIpScript}
               onChange={(v) => update("generateIpScript", v)}
+              templateAvailable={mondayFiles.ipTemplate.length > 0}
+              onTick={mondayFiles.refetch}
             />
-            <MondayScriptViewer label="Insulin Pump script template" file={null} />
+            <MondayScriptViewer
+              label="Insulin Pump script template"
+              files={mondayFiles.ipTemplate}
+              loading={mondayFiles.loading}
+            />
           </div>
 
           {state.ipCoveragePath && (
@@ -230,6 +249,8 @@ export function EvaluatePanel({ patient }: Props) {
           <FileUploadCard
             label="Clinical Files"
             files={state.clinicalFiles ?? []}
+            mondayFiles={mondayFiles.clinicalFiles}
+            mondayLoading={mondayFiles.loading}
             onAdd={(files) => update("clinicalFiles", [...(state.clinicalFiles ?? []), ...files])}
             onRemove={(idx) => {
               const next = [...(state.clinicalFiles ?? [])];
@@ -240,6 +261,8 @@ export function EvaluatePanel({ patient }: Props) {
           <FileUploadCard
             label="Final Clinical Files"
             files={state.finalClinicalFiles ?? []}
+            mondayFiles={mondayFiles.finalClinicals}
+            mondayLoading={mondayFiles.loading}
             onAdd={(files) =>
               update("finalClinicalFiles", [...(state.finalClinicalFiles ?? []), ...files])
             }
@@ -573,25 +596,67 @@ interface GenerateScriptToggleProps {
   label: string;
   value?: string;
   onChange: (v: string | undefined) => void;
+  templateAvailable: boolean; // true once Monday's template column has a file
+  onTick?: () => void; // called periodically while generating to refresh Monday state
 }
 
-function GenerateScriptToggle({ label, value, onChange }: GenerateScriptToggleProps) {
-  const isOn = value === "Generate";
+const GENERATE_MIN_WAIT_MS = 10_000;
+
+function GenerateScriptToggle({
+  label,
+  value,
+  onChange,
+  templateAvailable,
+  onTick,
+}: GenerateScriptToggleProps) {
+  const isGenerating = value === "Generate";
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [, forceTick] = useState(0);
+
+  // Start the timer when generating begins; reset when it ends.
+  useEffect(() => {
+    if (!isGenerating) {
+      setStartedAt(null);
+      return;
+    }
+    if (startedAt === null) setStartedAt(Date.now());
+  }, [isGenerating, startedAt]);
+
+  // While generating: tick every 1.5s to re-render and re-poll Monday for the
+  // template file. Auto-revert as soon as both 10s have elapsed AND the
+  // template has appeared.
+  useEffect(() => {
+    if (!isGenerating) return;
+    const id = setInterval(() => {
+      forceTick((t) => t + 1);
+      onTick?.();
+    }, 1500);
+    return () => clearInterval(id);
+  }, [isGenerating, onTick]);
+
+  useEffect(() => {
+    if (!isGenerating || startedAt === null) return;
+    const elapsed = Date.now() - startedAt;
+    if (elapsed >= GENERATE_MIN_WAIT_MS && templateAvailable) {
+      onChange(undefined);
+    }
+  }, [isGenerating, startedAt, templateAvailable, onChange]);
+
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50">
       <span className="text-sm text-muted-foreground whitespace-nowrap">{label}</span>
-      {isOn ? (
+      {isGenerating ? (
         <div className="flex items-center gap-1">
-          <span className="inline-flex items-center gap-1 h-8 px-3 text-xs font-medium rounded-md border border-emerald-300 bg-emerald-50 text-emerald-900">
-            <Check className="h-3 w-3" />
-            Triggered
+          <span className="inline-flex items-center gap-1 h-8 px-3 text-xs font-medium rounded-md border border-amber-300 bg-amber-50 text-amber-900">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Generating…
           </span>
           <Button
             variant="outline"
             size="sm"
             onClick={() => onChange(undefined)}
             className="h-8 px-2 text-xs"
-            title="Undo"
+            title="Cancel"
           >
             <X className="h-3 w-3" />
           </Button>
@@ -610,18 +675,24 @@ function GenerateScriptToggle({ label, value, onChange }: GenerateScriptTogglePr
   );
 }
 
-interface MondayScriptFile {
-  name: string;
-  url?: string;
-}
-
 interface MondayScriptViewerProps {
-  label: string; // "CGM Script" or "IP Script"
-  file: MondayScriptFile | null; // future: pulled from Monday's IP/CGM Template column
+  label: string; // "CGM script template" or "Insulin Pump script template"
+  files: MondayFileEntry[];
+  loading: boolean;
 }
 
-function MondayScriptViewer({ label, file }: MondayScriptViewerProps) {
-  if (!file) {
+function MondayScriptViewer({ label, files, loading }: MondayScriptViewerProps) {
+  if (loading && files.length === 0) {
+    return (
+      <div className="flex items-center justify-between gap-2 px-3 h-9 rounded-md border border-dashed bg-muted/20 text-xs text-muted-foreground">
+        <span className="flex items-center gap-2">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Loading…
+        </span>
+      </div>
+    );
+  }
+  if (files.length === 0) {
     return (
       <div className="flex items-center justify-between gap-2 px-3 h-9 rounded-md border border-dashed bg-muted/20 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
@@ -634,21 +705,32 @@ function MondayScriptViewer({ label, file }: MondayScriptViewerProps) {
       </div>
     );
   }
+  // Show first file inline + a Download All if more than one
   return (
-    <div className="flex items-center justify-between gap-2 px-3 h-9 rounded-md border bg-emerald-50 border-emerald-200">
-      <span className="flex items-center gap-2 truncate text-xs text-emerald-900">
-        <FileText className="h-3 w-3 shrink-0" />
-        <span className="truncate font-medium">{file.name}</span>
-      </span>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={!file.url}
-        onClick={() => file.url && window.open(file.url, "_blank")}
-        className="h-7 px-2 text-[11px]"
-      >
-        View
-      </Button>
+    <div className="space-y-1">
+      {files.map((f) => (
+        <div
+          key={f.assetId}
+          className="flex items-center justify-between gap-2 px-3 h-9 rounded-md border bg-emerald-50 border-emerald-200"
+        >
+          <span className="flex items-center gap-2 truncate text-xs text-emerald-900">
+            <FileText className="h-3 w-3 shrink-0" />
+            <span className="truncate font-medium">{f.name}</span>
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!f.public_url && !f.url}
+            onClick={() => {
+              const u = f.public_url || f.url;
+              if (u) window.open(u, "_blank");
+            }}
+            className="h-7 px-2 text-[11px] gap-1"
+          >
+            <ExternalLink className="h-3 w-3" /> View
+          </Button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -656,11 +738,20 @@ function MondayScriptViewer({ label, file }: MondayScriptViewerProps) {
 interface FileUploadCardProps {
   label: string;
   files: LocalFile[];
+  mondayFiles: MondayFileEntry[];
+  mondayLoading: boolean;
   onAdd: (files: LocalFile[]) => void;
   onRemove: (idx: number) => void;
 }
 
-function FileUploadCard({ label, files, onAdd, onRemove }: FileUploadCardProps) {
+function FileUploadCard({
+  label,
+  files,
+  mondayFiles,
+  mondayLoading,
+  onAdd,
+  onRemove,
+}: FileUploadCardProps) {
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleFiles = (fileList: FileList | null) => {
@@ -679,9 +770,67 @@ function FileUploadCard({ label, files, onAdd, onRemove }: FileUploadCardProps) 
     handleFiles(e.dataTransfer.files);
   };
 
+  const downloadAll = () => {
+    for (const f of mondayFiles) {
+      const url = f.public_url || f.url;
+      if (url) window.open(url, "_blank");
+    }
+  };
+
   return (
     <div className="rounded-lg border bg-muted/20 p-3">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">{label}</p>
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={downloadAll}
+          disabled={mondayFiles.length === 0 || mondayLoading}
+          className="h-7 px-2 text-[11px] gap-1"
+          title={
+            mondayFiles.length === 0
+              ? "No Monday files to download"
+              : `Download all ${mondayFiles.length} file(s) from Monday`
+          }
+        >
+          {mondayLoading ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Download className="h-3 w-3" />
+          )}
+          Download all
+          {mondayFiles.length > 0 && ` (${mondayFiles.length})`}
+        </Button>
+      </div>
+
+      {/* Monday-attached files */}
+      {mondayFiles.length > 0 && (
+        <ul className="mb-2 space-y-1">
+          {mondayFiles.map((f) => (
+            <li
+              key={f.assetId}
+              className="flex items-center justify-between gap-2 text-xs bg-emerald-50 border border-emerald-200 rounded px-2 py-1"
+            >
+              <span className="flex items-center gap-2 truncate text-emerald-900">
+                <FileText className="h-3 w-3 shrink-0" />
+                <span className="truncate font-medium">{f.name}</span>
+              </span>
+              <button
+                onClick={() => {
+                  const u = f.public_url || f.url;
+                  if (u) window.open(u, "_blank");
+                }}
+                disabled={!f.public_url && !f.url}
+                className="inline-flex items-center gap-1 text-[11px] text-emerald-800 hover:text-emerald-700"
+                title="View"
+              >
+                <ExternalLink className="h-3 w-3" /> View
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <label
         onDragOver={(e) => {
           e.preventDefault();
@@ -697,7 +846,7 @@ function FileUploadCard({ label, files, onAdd, onRemove }: FileUploadCardProps) 
         <p className="text-xs text-muted-foreground">
           Drop files here or <span className="underline">browse</span>
         </p>
-        <p className="text-[10px] text-muted-foreground">(local preview only — not synced)</p>
+        <p className="text-[10px] text-muted-foreground">(local preview — uploads to Monday wired up later)</p>
         <input
           type="file"
           multiple

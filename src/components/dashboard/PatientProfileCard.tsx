@@ -15,7 +15,6 @@ import {
   Building2,
   Send,
 } from "lucide-react";
-import { ClinicalsDownloadButton } from "./ClinicalsDownloadButton";
 
 interface Props {
   patient: Patient;
@@ -52,10 +51,7 @@ export function PatientProfileCard({ patient }: Props) {
 
   return (
     <div className="rounded-xl bg-card border shadow-card p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">Patient Profile</p>
-        <ClinicalsDownloadButton itemId={patient.id} patientName={patient.name} />
-      </div>
+      <p className="text-xs uppercase tracking-wider text-muted-foreground">Patient Profile</p>
 
       {/* Row 1: identity + insurance */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -235,3 +235,74 @@ export async function fetchItemAssets(itemId: string): Promise<MondayAsset[]> {
   }>(query, { itemId: [itemId] });
   return data.items?.[0]?.assets ?? [];
 }
+
+// ---- Per-column file fetcher ----
+// Each Monday file column stores a JSON value like:
+//   {"files":[{"name":"doc.pdf","assetId":12345,"isImage":false,...}]}
+// We cross-reference the assetId with the item's full assets list to get
+// public_url for each file in each requested column.
+
+export interface MondayFileEntry {
+  assetId: string;
+  name: string;
+  url?: string;
+  public_url?: string;
+}
+
+export type ColumnFiles = Record<string, MondayFileEntry[]>;
+
+export async function fetchItemFileColumns(
+  itemId: string,
+  columnIds: string[],
+): Promise<ColumnFiles> {
+  if (columnIds.length === 0) return {};
+  const query = `
+    query ($itemId: [ID!]!, $columnIds: [String!]!) {
+      items(ids: $itemId) {
+        assets(assets_source: all) {
+          id
+          name
+          url
+          public_url
+        }
+        column_values(ids: $columnIds) {
+          id
+          value
+        }
+      }
+    }
+  `;
+  const data = await gql<{
+    items: {
+      assets: MondayAsset[];
+      column_values: { id: string; value: string | null }[];
+    }[];
+  }>(query, { itemId: [itemId], columnIds });
+  const item = data.items?.[0];
+  if (!item) return {};
+  const assetById = new Map<string, MondayAsset>();
+  for (const a of item.assets ?? []) assetById.set(String(a.id), a);
+
+  const out: ColumnFiles = {};
+  for (const cv of item.column_values ?? []) {
+    out[cv.id] = [];
+    if (!cv.value) continue;
+    try {
+      const parsed = JSON.parse(cv.value) as { files?: { name?: string; assetId?: number | string }[] };
+      for (const f of parsed.files ?? []) {
+        const assetId = String(f.assetId ?? "");
+        if (!assetId) continue;
+        const a = assetById.get(assetId);
+        out[cv.id].push({
+          assetId,
+          name: f.name ?? a?.name ?? "(unnamed)",
+          url: a?.url,
+          public_url: a?.public_url,
+        });
+      }
+    } catch {
+      // ignore malformed value
+    }
+  }
+  return out;
+}
