@@ -40,6 +40,11 @@ const Index = () => {
     [patients, selectedId],
   );
 
+  const onUpdate = (patch: Partial<Patient>) => {
+    if (!selected) return;
+    update(selected.id, patch);
+  };
+
   const resetForNewPatient = () => {
     if (!selected) return;
     clearOverlay(selected.id);
@@ -52,7 +57,6 @@ const Index = () => {
     try {
       await sendPatientToMonday(selected, mainTab);
       toast.success("Sent to Monday");
-      // Refetch after send since the patient will move to next sub-stage
       setTimeout(refetch, 1000);
     } catch (e) {
       toast.error("Send to Monday failed", { description: e instanceof Error ? e.message : String(e) });
@@ -126,39 +130,25 @@ const Index = () => {
                 <>
                   <TabsContent value="evaluate" className="space-y-5 mt-0">
                     <PatientProfileCard patient={selected} />
-                    <EvaluatePanel
-                      patient={selected}
-                      onNotesChange={(v) => update(selected.id, { mnEvalNotes: v })}
-                    />
+                    <EvaluatePanel patient={selected} onUpdate={onUpdate} />
                     <SendToMondayButton onSend={handleSend} disabled={!selected} />
                   </TabsContent>
 
                   <TabsContent value="sendRequest" className="space-y-5 mt-0">
                     <PatientProfileCard patient={selected} />
-                    <SendRequestPanel
-                      patient={selected}
-                      onNotesChange={(v) => update(selected.id, { confirmChaseNotes: v })}
-                    />
+                    <SendRequestPanel patient={selected} onUpdate={onUpdate} />
                     <SendToMondayButton onSend={handleSend} disabled={!selected} />
                   </TabsContent>
 
                   <TabsContent value="confirmReceipt" className="space-y-5 mt-0">
                     <PatientProfileCard patient={selected} />
-                    <ReceiptChasePanel
-                      patient={selected}
-                      mode="confirmReceipt"
-                      onUpdate={(patch) => update(selected.id, patch)}
-                    />
+                    <ReceiptChasePanel patient={selected} mode="confirmReceipt" onUpdate={onUpdate} />
                     <SendToMondayButton onSend={handleSend} disabled={!selected} />
                   </TabsContent>
 
                   <TabsContent value="chase" className="space-y-5 mt-0">
                     <PatientProfileCard patient={selected} />
-                    <ReceiptChasePanel
-                      patient={selected}
-                      mode="chase"
-                      onUpdate={(patch) => update(selected.id, patch)}
-                    />
+                    <ReceiptChasePanel patient={selected} mode="chase" onUpdate={onUpdate} />
                     <SendToMondayButton onSend={handleSend} disabled={!selected} />
                   </TabsContent>
                 </>

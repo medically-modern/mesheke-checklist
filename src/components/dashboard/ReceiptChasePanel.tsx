@@ -1,20 +1,14 @@
 import type { Patient } from "@/lib/workflow";
+import { StatusSelect } from "./StatusSelect";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { MR_OPTS, MN_ATTEMPTS_OPTS } from "@/lib/fieldOptions";
 
 interface Props {
   patient: Patient;
   mode: "confirmReceipt" | "chase";
   onUpdate: (patch: Partial<Patient>) => void;
-}
-
-function statusColor(val?: string): string {
-  if (!val) return "bg-muted text-muted-foreground";
-  const v = val.toLowerCase();
-  if (v.includes("attempt")) return "bg-blue-100 text-blue-800";
-  if (v === "escalate") return "bg-red-100 text-red-800";
-  return "bg-muted text-muted-foreground";
 }
 
 export function ReceiptChasePanel({ patient, mode, onUpdate }: Props) {
@@ -23,28 +17,12 @@ export function ReceiptChasePanel({ patient, mode, onUpdate }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Status */}
+      {/* Status selectors */}
       <div className="rounded-xl bg-card border shadow-card p-5">
         <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">{title}</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50">
-            <span className="text-sm text-muted-foreground">MRs / Clinicals</span>
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-              patient.mrsClinicals?.toLowerCase() === "mr received"
-                ? "bg-emerald-100 text-emerald-800"
-                : patient.mrsClinicals?.toLowerCase() === "collect"
-                  ? "bg-amber-100 text-amber-800"
-                  : "bg-muted text-muted-foreground"
-            }`}>
-              {patient.mrsClinicals || "—"}
-            </span>
-          </div>
-          <div className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50">
-            <span className="text-sm text-muted-foreground">MN Attempts</span>
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor(patient.mnAttempts)}`}>
-              {patient.mnAttempts || "—"}
-            </span>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+          <StatusSelect label="MRs / Clinicals" value={patient.mrsClinicals} options={MR_OPTS} onChange={(v) => onUpdate({ mrsClinicals: v })} />
+          <StatusSelect label="MN Attempts" value={patient.mnAttempts} options={MN_ATTEMPTS_OPTS} onChange={(v) => onUpdate({ mnAttempts: v })} />
         </div>
       </div>
 
@@ -53,28 +31,26 @@ export function ReceiptChasePanel({ patient, mode, onUpdate }: Props) {
         <p className="text-xs uppercase tracking-wider text-muted-foreground">Details</p>
 
         {!isChase && (
-          <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Receipt Confirmed Date</Label>
-                <Input
-                  type="date"
-                  value={patient.receiptConfirmedDate ?? ""}
-                  onChange={(e) => onUpdate({ receiptConfirmedDate: e.target.value })}
-                  className="text-sm"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Receipt Confirmed Name / Title</Label>
-                <Input
-                  value={patient.receiptConfirmedName ?? ""}
-                  onChange={(e) => onUpdate({ receiptConfirmedName: e.target.value })}
-                  placeholder="Name and title..."
-                  className="text-sm"
-                />
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Receipt Confirmed Date</Label>
+              <Input
+                type="date"
+                value={patient.receiptConfirmedDate ?? ""}
+                onChange={(e) => onUpdate({ receiptConfirmedDate: e.target.value })}
+                className="text-sm"
+              />
             </div>
-          </>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Receipt Confirmed Name / Title</Label>
+              <Input
+                value={patient.receiptConfirmedName ?? ""}
+                onChange={(e) => onUpdate({ receiptConfirmedName: e.target.value })}
+                placeholder="Name and title..."
+                className="text-sm"
+              />
+            </div>
+          </div>
         )}
 
         {isChase && (
