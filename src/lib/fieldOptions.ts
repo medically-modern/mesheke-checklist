@@ -139,13 +139,15 @@ export const IP_PATH_OPTS: StatusOption[] = [
   { label: "IW New Insurance", index: 5 },
 ];
 
-// Generate Script — Evaluate tab uses just "Generate" (blank by default)
-export const GEN_SCRIPT_SIMPLE_OPTS: StatusOption[] = [
-  { label: "Generate", index: 0 },
-];
+// Most-used ICD-10 codes — pinned to the top of the diagnosis combobox
+export const DIAGNOSIS_FAVORITES: string[] = ["E10.65", "E10.9", "E11.65", "E11.9"];
 
-// Diagnosis dropdown — same ICD list, just sorted alphabetically for the new UI
-export const DIAGNOSIS_LIST: string[] = DIAGNOSIS_OPTS
+// All other ICD-10 codes, alphabetical (matches numerical order for these codes)
+export const DIAGNOSIS_OTHER: string[] = DIAGNOSIS_OPTS
   .filter((o) => o.label !== "Evaluate" && o.label !== "Collect")
   .map((o) => o.label)
+  .filter((code) => !DIAGNOSIS_FAVORITES.includes(code))
   .sort();
+
+// Full diagnosis list (favorites first, then the rest)
+export const DIAGNOSIS_LIST: string[] = [...DIAGNOSIS_FAVORITES, ...DIAGNOSIS_OTHER];

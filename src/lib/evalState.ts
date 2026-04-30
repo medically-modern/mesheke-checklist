@@ -21,14 +21,12 @@ export interface EvalState {
   // CGM block
   cgmScriptValid?: ValidInvalid;
   cgmCoveragePath?: CgmCoveragePath;
-  generateCgmScript?: string; // Generate (or blank)
-  cgmScriptFile?: LocalFile;
+  generateCgmScript?: string; // "Generate" (or blank)
 
   // IP block
   ipCoveragePath?: IpPath;
   ipScriptValid?: ValidInvalid;
-  generateIpScript?: string; // Generate (or blank)
-  ipScriptFile?: LocalFile;
+  generateIpScript?: string; // "Generate" (or blank)
   diabetesEducation?: YesNo;
   threeInjections?: YesNo;
   cgmUse?: YesNo;

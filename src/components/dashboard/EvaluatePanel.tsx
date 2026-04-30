@@ -25,8 +25,8 @@ import {
   CGM_COVERAGE_OPTS,
   LMN_OPTS,
   IP_PATH_OPTS,
-  DIAGNOSIS_LIST,
-  GEN_SCRIPT_SIMPLE_OPTS,
+  DIAGNOSIS_FAVORITES,
+  DIAGNOSIS_OTHER,
 } from "@/lib/fieldOptions";
 import {
   IP_PATH_FIELDS,
@@ -179,17 +179,12 @@ export function EvaluatePanel({ patient }: Props) {
             />
           </div>
           <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 items-center">
-            <StatusSelect
+            <GenerateScriptToggle
               label="Generate CGM Script"
               value={state.generateCgmScript}
-              options={GEN_SCRIPT_SIMPLE_OPTS}
               onChange={(v) => update("generateCgmScript", v)}
             />
-            <ScriptFileWidget
-              file={state.cgmScriptFile}
-              onAdd={(f) => update("cgmScriptFile", f)}
-              onRemove={() => update("cgmScriptFile", undefined)}
-            />
+            <MondayScriptViewer label="CGM Script" file={null} />
           </div>
         </SectionCard>
       )}
@@ -215,17 +210,12 @@ export function EvaluatePanel({ patient }: Props) {
             />
           </div>
           <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 items-center">
-            <StatusSelect
+            <GenerateScriptToggle
               label="Generate IP Script"
               value={state.generateIpScript}
-              options={GEN_SCRIPT_SIMPLE_OPTS}
               onChange={(v) => update("generateIpScript", v)}
             />
-            <ScriptFileWidget
-              file={state.ipScriptFile}
-              onAdd={(f) => update("ipScriptFile", f)}
-              onRemove={() => update("ipScriptFile", undefined)}
-            />
+            <MondayScriptViewer label="IP Script" file={null} />
           </div>
 
           {state.ipCoveragePath && (
@@ -507,6 +497,25 @@ function DiagnosisField({ value, onChange }: DiagnosisFieldProps) {
   // a light emerald that keeps text readable on hover/keyboard focus.
   const itemClass =
     "text-xs cursor-pointer text-foreground data-[selected=true]:bg-emerald-100 data-[selected=true]:text-emerald-900 aria-selected:bg-emerald-100 aria-selected:text-emerald-900";
+  const renderItem = (code: string) => (
+    <CommandItem
+      key={code}
+      value={code}
+      onSelect={() => {
+        onChange(code === value ? "" : code);
+        setOpen(false);
+      }}
+      className={itemClass}
+    >
+      <Check
+        className={cn(
+          "mr-2 h-3 w-3",
+          value === code ? "opacity-100" : "opacity-0",
+        )}
+      />
+      {code}
+    </CommandItem>
+  );
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50">
       <span className="text-sm text-muted-foreground whitespace-nowrap">Diagnosis</span>
@@ -545,25 +554,12 @@ function DiagnosisField({ value, onChange }: DiagnosisFieldProps) {
                   <X className="mr-2 h-3 w-3" />
                   (none)
                 </CommandItem>
-                {DIAGNOSIS_LIST.map((code) => (
-                  <CommandItem
-                    key={code}
-                    value={code}
-                    onSelect={() => {
-                      onChange(code === value ? "" : code);
-                      setOpen(false);
-                    }}
-                    className={itemClass}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-3 w-3",
-                        value === code ? "opacity-100" : "opacity-0",
-                      )}
-                    />
-                    {code}
-                  </CommandItem>
-                ))}
+              </CommandGroup>
+              <CommandGroup heading="Favorites">
+                {DIAGNOSIS_FAVORITES.map(renderItem)}
+              </CommandGroup>
+              <CommandGroup heading="All Codes">
+                {DIAGNOSIS_OTHER.map(renderItem)}
               </CommandGroup>
             </CommandList>
           </Command>
@@ -573,73 +569,87 @@ function DiagnosisField({ value, onChange }: DiagnosisFieldProps) {
   );
 }
 
-interface ScriptFileWidgetProps {
-  file?: LocalFile;
-  onAdd: (file: LocalFile) => void;
-  onRemove: () => void;
+interface GenerateScriptToggleProps {
+  label: string;
+  value?: string;
+  onChange: (v: string | undefined) => void;
 }
 
-function ScriptFileWidget({ file, onAdd, onRemove }: ScriptFileWidgetProps) {
-  const [isDragOver, setIsDragOver] = useState(false);
-
-  const handleFiles = (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return;
-    const f = fileList[0]; // single file only
-    onAdd({ name: f.name, size: f.size, addedAt: new Date().toISOString() });
-  };
-
-  const onDrop = (e: DragEvent<HTMLLabelElement>) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    handleFiles(e.dataTransfer.files);
-  };
-
-  if (file) {
-    return (
-      <div className="flex items-center justify-between gap-2 px-3 h-9 rounded-md border bg-emerald-50 border-emerald-200">
-        <span className="flex items-center gap-2 truncate text-xs text-emerald-900">
-          <FileText className="h-3 w-3 shrink-0" />
-          <span className="truncate font-medium">{file.name}</span>
-          <span className="text-emerald-700/70 shrink-0">
-            {(file.size / 1024).toFixed(1)} KB
+function GenerateScriptToggle({ label, value, onChange }: GenerateScriptToggleProps) {
+  const isOn = value === "Generate";
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50">
+      <span className="text-sm text-muted-foreground whitespace-nowrap">{label}</span>
+      {isOn ? (
+        <div className="flex items-center gap-1">
+          <span className="inline-flex items-center gap-1 h-8 px-3 text-xs font-medium rounded-md border border-emerald-300 bg-emerald-50 text-emerald-900">
+            <Check className="h-3 w-3" />
+            Triggered
           </span>
-        </span>
-        <button
-          onClick={onRemove}
-          className="text-emerald-800 hover:text-red-600 shrink-0"
-          aria-label="Remove file"
-          title="Remove file"
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onChange(undefined)}
+            className="h-8 px-2 text-xs"
+            title="Undo"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      ) : (
+        <Button
+          size="sm"
+          onClick={() => onChange("Generate")}
+          className="h-8 px-3 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
         >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+          <FileText className="h-3 w-3" />
+          Generate
+        </Button>
+      )}
+    </div>
+  );
+}
+
+interface MondayScriptFile {
+  name: string;
+  url?: string;
+}
+
+interface MondayScriptViewerProps {
+  label: string; // "CGM Script" or "IP Script"
+  file: MondayScriptFile | null; // future: pulled from Monday's IP/CGM Template column
+}
+
+function MondayScriptViewer({ label, file }: MondayScriptViewerProps) {
+  if (!file) {
+    return (
+      <div className="flex items-center justify-between gap-2 px-3 h-9 rounded-md border border-dashed bg-muted/20 text-xs text-muted-foreground">
+        <span className="flex items-center gap-2">
+          <FileText className="h-3 w-3" />
+          No {label} on Monday yet
+        </span>
+        <Button variant="ghost" size="sm" disabled className="h-7 px-2 text-[11px]">
+          View
+        </Button>
       </div>
     );
   }
-
   return (
-    <label
-      onDragOver={(e) => {
-        e.preventDefault();
-        setIsDragOver(true);
-      }}
-      onDragLeave={() => setIsDragOver(false)}
-      onDrop={onDrop}
-      className={cn(
-        "flex items-center justify-center gap-2 h-9 rounded-md border-2 border-dashed cursor-pointer transition-colors text-xs",
-        isDragOver
-          ? "border-emerald-400 bg-emerald-50 text-emerald-800"
-          : "border-muted bg-background text-muted-foreground hover:bg-muted/30",
-      )}
-    >
-      <Upload className="h-3 w-3" />
-      <span>Drop generated PDF or browse</span>
-      <input
-        type="file"
-        className="hidden"
-        accept=".pdf,application/pdf"
-        onChange={(e) => handleFiles(e.target.files)}
-      />
-    </label>
+    <div className="flex items-center justify-between gap-2 px-3 h-9 rounded-md border bg-emerald-50 border-emerald-200">
+      <span className="flex items-center gap-2 truncate text-xs text-emerald-900">
+        <FileText className="h-3 w-3 shrink-0" />
+        <span className="truncate font-medium">{file.name}</span>
+      </span>
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={!file.url}
+        onClick={() => file.url && window.open(file.url, "_blank")}
+        className="h-7 px-2 text-[11px]"
+      >
+        View
+      </Button>
+    </div>
   );
 }
 
