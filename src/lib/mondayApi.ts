@@ -252,6 +252,26 @@ export interface MondayFileEntry {
 
 export type ColumnFiles = Record<string, MondayFileEntry[]>;
 
+/** Removes ALL files from a single file column on a single item. */
+export async function deleteFileFromColumn(
+  itemId: string,
+  columnId: string,
+): Promise<void> {
+  const query = `
+    mutation ($itemId: ID!, $columnId: String!) {
+      change_column_value(
+        item_id: $itemId,
+        column_id: $columnId,
+        board_id: ${BOARD_ID},
+        value: "{\\"clear_all\\": true}"
+      ) {
+        id
+      }
+    }
+  `;
+  await gql(query, { itemId, columnId });
+}
+
 export async function fetchItemFileColumns(
   itemId: string,
   columnIds: string[],

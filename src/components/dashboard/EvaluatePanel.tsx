@@ -51,7 +51,15 @@ import {
   type YesNo,
 } from "@/lib/evalState";
 import { useMondayFiles } from "@/hooks/useMondayFiles";
-import type { MondayFileEntry } from "@/lib/mondayApi";
+import {
+  COL,
+  deleteFileFromColumn,
+  hasToken,
+  writeStatusIndex,
+  type MondayFileEntry,
+} from "@/lib/mondayApi";
+import { GEN_SCRIPT_STATUS } from "@/lib/mondayMapping";
+import { toast } from "sonner";
 import {
   Check,
   X,
@@ -118,6 +126,41 @@ export function EvaluatePanel({ patient }: Props) {
     clearEvalState(patient.id);
     setState({});
   };
+
+  // Generate button handlers — write the Monday status column so the
+  // DocExport automation actually runs. On auto-revert (after 10s + template
+  // appears), reset the column to "Ready" so the next click can retrigger.
+  const triggerGenerate = useCallback(
+    async (
+      stateKey: "generateCgmScript" | "generateIpScript",
+      columnId: string,
+      v: string | undefined,
+    ) => {
+      update(stateKey, v);
+      if (!hasToken()) return;
+      const idx = v === "Generate" ? GEN_SCRIPT_STATUS.generate : GEN_SCRIPT_STATUS.ready;
+      try {
+        await writeStatusIndex(patient.id, columnId, idx);
+      } catch (e) {
+        toast.error(
+          v === "Generate"
+            ? "Couldn't trigger script generation on Monday"
+            : "Couldn't reset Generate column on Monday",
+          { description: e instanceof Error ? e.message : String(e) },
+        );
+      }
+    },
+    [patient.id, update],
+  );
+
+  const handleGenerateCgm = useCallback(
+    (v: string | undefined) => triggerGenerate("generateCgmScript", COL.generateCgmScript, v),
+    [triggerGenerate],
+  );
+  const handleGenerateIp = useCallback(
+    (v: string | undefined) => triggerGenerate("generateIpScript", COL.generateIpScript, v),
+    [triggerGenerate],
+  );
 
   const validity = useMemo(
     () => deriveValidity(state, patient, showCgm, showIp),
@@ -195,13 +238,16 @@ export function EvaluatePanel({ patient }: Props) {
             <GenerateScriptToggle
               label="Generate CGM Script"
               value={state.generateCgmScript}
-              onChange={(v) => update("generateCgmScript", v)}
+              onChange={handleGenerateCgm}
               templateAvailable={mondayFiles.cgmTemplate.length > 0}
             />
             <MondayScriptViewer
               label="CGM script template"
+              itemId={patient.id}
+              columnId={COL.cgmTemplate}
               files={mondayFiles.cgmTemplate}
               loading={mondayFiles.loading}
+              onDeleted={mondayFiles.refetch}
             />
           </div>
         </SectionCard>
@@ -231,13 +277,16 @@ export function EvaluatePanel({ patient }: Props) {
             <GenerateScriptToggle
               label="Generate Insulin Pump Script"
               value={state.generateIpScript}
-              onChange={(v) => update("generateIpScript", v)}
+              onChange={handleGenerateIp}
               templateAvailable={mondayFiles.ipTemplate.length > 0}
             />
             <MondayScriptViewer
               label="Insulin Pump script template"
+              itemId={patient.id}
+              columnId={COL.ipTemplate}
               files={mondayFiles.ipTemplate}
               loading={mondayFiles.loading}
+              onDeleted={mondayFiles.refetch}
             />
           </div>
 
@@ -678,11 +727,39 @@ function GenerateScriptToggle({
 
 interface MondayScriptViewerProps {
   label: string; // "CGM script template" or "Insulin Pump script template"
+  itemId: string;
+  columnId: string;
   files: MondayFileEntry[];
   loading: boolean;
+  onDeleted: () => void;
 }
 
-function MondayScriptViewer({ label, files, loading }: MondayScriptViewerProps) {
+function MondayScriptViewer({
+  label,
+  itemId,
+  columnId,
+  files,
+  loading,
+  onDeleted,
+}: MondayScriptViewerProps) {
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!confirm(`Delete the ${label} from Monday? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      await deleteFileFromColumn(itemId, columnId);
+      toast.success("Template deleted");
+      onDeleted();
+    } catch (e) {
+      toast.error("Delete failed", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading && files.length === 0) {
     return (
       <div className="flex items-center justify-between gap-2 px-3 h-9 rounded-md border border-dashed bg-muted/20 text-xs text-muted-foreground">
@@ -706,7 +783,6 @@ function MondayScriptViewer({ label, files, loading }: MondayScriptViewerProps) 
       </div>
     );
   }
-  // Show first file inline + a Download All if more than one
   return (
     <div className="space-y-1">
       {files.map((f) => (
@@ -718,18 +794,34 @@ function MondayScriptViewer({ label, files, loading }: MondayScriptViewerProps) 
             <FileText className="h-3 w-3 shrink-0" />
             <span className="truncate font-medium">{f.name}</span>
           </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!f.public_url && !f.url}
-            onClick={() => {
-              const u = f.public_url || f.url;
-              if (u) window.open(u, "_blank");
-            }}
-            className="h-7 px-2 text-[11px] gap-1"
-          >
-            <ExternalLink className="h-3 w-3" /> View
-          </Button>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!f.public_url && !f.url}
+              onClick={() => {
+                const u = f.public_url || f.url;
+                if (u) window.open(u, "_blank");
+              }}
+              className="h-7 px-2 text-[11px] gap-1"
+            >
+              <ExternalLink className="h-3 w-3" /> View
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="h-7 px-2 text-[11px] text-red-700 hover:text-red-800 hover:bg-red-50 border-red-200"
+              title="Delete from Monday"
+            >
+              {deleting ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Trash2 className="h-3 w-3" />
+              )}
+            </Button>
+          </div>
         </div>
       ))}
     </div>
@@ -779,8 +871,9 @@ function FileUploadCard({
   };
 
   return (
-    <div className="rounded-lg border bg-muted/20 p-3">
-      <div className="flex items-center justify-between mb-2 gap-2">
+    <div className="rounded-lg border bg-muted/20 p-3 h-full flex flex-col gap-2 min-h-[200px]">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2">
         <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
         <Button
           variant="outline"
@@ -804,9 +897,9 @@ function FileUploadCard({
         </Button>
       </div>
 
-      {/* Monday-attached files */}
-      {mondayFiles.length > 0 && (
-        <ul className="mb-2 space-y-1">
+      {/* Monday-attached files (always rendered for consistent layout) */}
+      {mondayFiles.length > 0 ? (
+        <ul className="space-y-1">
           {mondayFiles.map((f) => (
             <li
               key={f.assetId}
@@ -830,8 +923,13 @@ function FileUploadCard({
             </li>
           ))}
         </ul>
+      ) : (
+        <p className="text-[11px] text-muted-foreground italic px-1 py-1">
+          No Monday files attached
+        </p>
       )}
 
+      {/* Upload drop zone — fills remaining vertical space so both boxes mirror */}
       <label
         onDragOver={(e) => {
           e.preventDefault();
@@ -839,7 +937,7 @@ function FileUploadCard({
         }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={onDrop}
-        className={`flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed py-6 cursor-pointer transition-colors ${
+        className={`flex-1 flex flex-col items-center justify-center gap-1 rounded-md border-2 border-dashed py-6 cursor-pointer transition-colors ${
           isDragOver ? "border-emerald-400 bg-emerald-50" : "border-muted bg-background hover:bg-muted/30"
         }`}
       >
@@ -857,7 +955,7 @@ function FileUploadCard({
       </label>
 
       {files.length > 0 && (
-        <ul className="mt-2 space-y-1">
+        <ul className="space-y-1">
           {files.map((f, i) => (
             <li
               key={`${f.name}-${i}`}
