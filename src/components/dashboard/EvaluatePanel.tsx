@@ -77,6 +77,7 @@ import {
   Download,
   ExternalLink,
   Loader2,
+  Send,
 } from "lucide-react";
 
 interface Props {
@@ -206,96 +207,25 @@ export function EvaluatePanel({ patient }: Props) {
     prevIpStatusRef.current = curr;
   }, [mondayFiles.generateIpStatus, update]);
 
-  // Generic writer for status (single-label) columns. Writes label or clears.
-  const writeStatus = useCallback(
-    async (columnId: string, label: string | undefined | null) => {
-      if (!hasToken()) return;
-      try {
-        if (!label) {
-          await clearStatusColumn(patient.id, columnId);
-        } else {
-          await writeStatusLabel(patient.id, columnId, label);
-        }
-      } catch (e) {
-        toast.error("Couldn't save to Monday", {
-          description: e instanceof Error ? e.message : String(e),
-        });
-      }
-    },
-    [patient.id],
-  );
-
-  // Writer for multi-select dropdown columns.
-  const writeDropdown = useCallback(
-    async (columnId: string, labels: string[]) => {
-      if (!hasToken()) return;
-      try {
-        await writeDropdownLabels(patient.id, columnId, labels);
-      } catch (e) {
-        toast.error("Couldn't save reasons to Monday", {
-          description: e instanceof Error ? e.message : String(e),
-        });
-      }
-    },
-    [patient.id],
-  );
-
-  // Writer for date columns.
-  const writeDateField = useCallback(
-    async (columnId: string, dateStr: string | undefined) => {
-      if (!hasToken()) return;
-      try {
-        if (!dateStr) await clearStatusColumn(patient.id, columnId);
-        else await writeDate(patient.id, columnId, dateStr);
-      } catch (e) {
-        toast.error("Couldn't save date to Monday", {
-          description: e instanceof Error ? e.message : String(e),
-        });
-      }
-    },
-    [patient.id],
-  );
-
-  // Field-specific update wrappers: update local state + write to Monday.
+  // Field-specific local-only update wrappers. All Monday writes happen via
+  // the Send to Monday button at the bottom — except Generate Script which is
+  // immediate (DocExport requires the live status change).
   const setIpCoveragePath = useCallback(
-    (v: IpPath | undefined) => {
-      update("ipCoveragePath", v);
-      void writeStatus(COL.ipCoveragePath, v);
-    },
-    [update, writeStatus],
+    (v: IpPath | undefined) => update("ipCoveragePath", v),
+    [update],
   );
   const setCgmCoveragePath = useCallback(
-    (v: CgmCoveragePath | undefined) => {
-      update("cgmCoveragePath", v);
-      void writeStatus(COL.cgmCoveragePath, v);
-    },
-    [update, writeStatus],
+    (v: CgmCoveragePath | undefined) => update("cgmCoveragePath", v),
+    [update],
   );
-  const setDiagnosis = useCallback(
-    (v: string) => {
-      update("diagnosis", v);
-      void writeStatus(COL.diagnosis, v || null);
-    },
-    [update, writeStatus],
-  );
+  const setDiagnosis = useCallback((v: string) => update("diagnosis", v), [update]);
   const setMrReceived = useCallback(
-    (v: YesNo | undefined) => {
-      update("mrReceived", v);
-      // Map Yes/No → MR Received / Collect on the MRs/Clinicals column
-      const label = v === "Yes" ? "MR Received" : v === "No" ? "Collect" : null;
-      void writeStatus(COL.mrsClinicals, label);
-    },
-    [update, writeStatus],
+    (v: YesNo | undefined) => update("mrReceived", v),
+    [update],
   );
   const setLastVisitDate = useCallback(
-    (v: string) => {
-      update("lastVisitDate", v);
-      void writeDateField(COL.lastVisit, v);
-      // Auto-derived MR expiry too
-      const { expiry } = getMrExpiry(v);
-      void writeDateField(COL.mrExpiryDate, expiry ? expiry.toISOString().slice(0, 10) : undefined);
-    },
-    [update, writeDateField],
+    (v: string) => update("lastVisitDate", v),
+    [update],
   );
 
   const validity = useMemo(
@@ -305,30 +235,101 @@ export function EvaluatePanel({ patient }: Props) {
 
   const preview = useMemo(() => buildMondayPreview(state, validity), [state, validity]);
 
-  // Write derived Medical Necessity + General MN Invalid Reasons to Monday
-  // whenever the validity rollup changes. Debounced so we don't spam writes.
-  const lastWrittenRef = useRef<{ mn?: string; reasons?: string }>({});
-  useEffect(() => {
-    if (!hasToken()) return;
-    const mn = preview.medicalNecessity;
-    const reasonsKey = preview.generalMnInvalidReasons.join("|");
-    const last = lastWrittenRef.current;
-    const id = setTimeout(() => {
-      if (last.mn !== mn) {
-        void writeStatusLabel(patient.id, COL.medicalNecessity, mn).catch(() => {});
-        lastWrittenRef.current.mn = mn;
-      }
-      if (last.reasons !== reasonsKey) {
-        void writeDropdownLabels(
+  // Send to Monday — batched write of every column the rep has edited locally.
+  // Generate Script triggers and template deletes are immediate elsewhere.
+  const [sending, setSending] = useState(false);
+  const handleSendToMonday = useCallback(async () => {
+    if (!hasToken()) {
+      toast.error("Monday token not configured");
+      return;
+    }
+    setSending(true);
+    const tasks: { label: string; run: () => Promise<unknown> }[] = [];
+
+    if (state.ipCoveragePath) {
+      tasks.push({
+        label: "IP Coverage Path",
+        run: () => writeStatusLabel(patient.id, COL.ipCoveragePath, state.ipCoveragePath!),
+      });
+    } else {
+      tasks.push({
+        label: "IP Coverage Path",
+        run: () => clearStatusColumn(patient.id, COL.ipCoveragePath),
+      });
+    }
+    if (state.cgmCoveragePath) {
+      tasks.push({
+        label: "CGM Coverage Path",
+        run: () => writeStatusLabel(patient.id, COL.cgmCoveragePath, state.cgmCoveragePath!),
+      });
+    } else {
+      tasks.push({
+        label: "CGM Coverage Path",
+        run: () => clearStatusColumn(patient.id, COL.cgmCoveragePath),
+      });
+    }
+    if (state.diagnosis) {
+      tasks.push({
+        label: "Diagnosis",
+        run: () => writeStatusLabel(patient.id, COL.diagnosis, state.diagnosis!),
+      });
+    } else {
+      tasks.push({
+        label: "Diagnosis",
+        run: () => clearStatusColumn(patient.id, COL.diagnosis),
+      });
+    }
+    const mrLabel =
+      state.mrReceived === "Yes" ? "MR Received" : state.mrReceived === "No" ? "Collect" : null;
+    if (mrLabel) {
+      tasks.push({
+        label: "MRs / Clinicals",
+        run: () => writeStatusLabel(patient.id, COL.mrsClinicals, mrLabel),
+      });
+    }
+    if (state.lastVisitDate) {
+      tasks.push({
+        label: "Last Visit Date",
+        run: () => writeDate(patient.id, COL.lastVisit, state.lastVisitDate!),
+      });
+    }
+    const { expiry } = getMrExpiry(state.lastVisitDate);
+    if (expiry) {
+      tasks.push({
+        label: "MR Expiry Date",
+        run: () => writeDate(patient.id, COL.mrExpiryDate, expiry.toISOString().slice(0, 10)),
+      });
+    }
+    tasks.push({
+      label: "Medical Necessity",
+      run: () => writeStatusLabel(patient.id, COL.medicalNecessity, preview.medicalNecessity),
+    });
+    tasks.push({
+      label: "General MN Invalid Reasons",
+      run: () =>
+        writeDropdownLabels(
           patient.id,
           COL.generalMnInvalidReasons,
           preview.generalMnInvalidReasons,
-        ).catch(() => {});
-        lastWrittenRef.current.reasons = reasonsKey;
+        ),
+    });
+
+    const results = await Promise.allSettled(tasks.map((t) => t.run()));
+    const failures: string[] = [];
+    results.forEach((r, i) => {
+      if (r.status === "rejected") {
+        failures.push(`${tasks[i].label}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
       }
-    }, 600);
-    return () => clearTimeout(id);
-  }, [patient.id, preview.medicalNecessity, preview.generalMnInvalidReasons]);
+    });
+    setSending(false);
+    if (failures.length === 0) {
+      toast.success(`Sent ${tasks.length} fields to Monday`);
+    } else {
+      toast.error(`${failures.length} write(s) failed`, {
+        description: failures.slice(0, 3).join("\n"),
+      });
+    }
+  }, [patient.id, state, preview]);
 
   return (
     <div className="space-y-4">
@@ -502,6 +503,8 @@ export function EvaluatePanel({ patient }: Props) {
         validity={validity}
         preview={preview}
         onClearLocal={clearLocalState}
+        onSendToMonday={handleSendToMonday}
+        sending={sending}
       />
     </div>
   );
@@ -1099,9 +1102,17 @@ interface ValiditySummaryProps {
   validity: ReturnType<typeof deriveValidity>;
   preview: ReturnType<typeof buildMondayPreview>;
   onClearLocal: () => void;
+  onSendToMonday: () => void;
+  sending: boolean;
 }
 
-function ValiditySummary({ validity, preview, onClearLocal }: ValiditySummaryProps) {
+function ValiditySummary({
+  validity,
+  preview,
+  onClearLocal,
+  onSendToMonday,
+  sending,
+}: ValiditySummaryProps) {
   return (
     <section className="rounded-xl bg-card border shadow-card p-5 space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1110,7 +1121,7 @@ function ValiditySummary({ validity, preview, onClearLocal }: ValiditySummaryPro
             Monday Preview
           </p>
           <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-            Derived values that would be written to Monday on submit (not synced yet).
+            Review the values below, then press Send to Monday.
           </p>
         </div>
         <Button
@@ -1156,6 +1167,27 @@ function ValiditySummary({ validity, preview, onClearLocal }: ValiditySummaryPro
           Monday Columns
         </p>
         <MondayPreviewPanel preview={preview} />
+      </div>
+
+      <div className="flex justify-end pt-1">
+        <Button
+          size="lg"
+          onClick={onSendToMonday}
+          disabled={sending}
+          className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-elevate"
+        >
+          {sending ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Sending…
+            </>
+          ) : (
+            <>
+              <Send className="h-4 w-4" />
+              Send to Monday
+            </>
+          )}
+        </Button>
       </div>
     </section>
   );
