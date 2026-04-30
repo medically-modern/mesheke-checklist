@@ -1,7 +1,13 @@
-// ===== TEMPLATE: Batch writer for "Send to Monday" =====
-// Wire up your column writes here. Each write retries up to 2 times.
+// Batch writer for Medical Necessity "Send to Monday"
 
-import { writeStatusIndex, writeText, COL } from "./mondayApi";
+import { writeStatusIndex, writeText, writeLongText, writeDate, COL } from "./mondayApi";
+import {
+  SUB_STAGE_INDEX,
+  ADVANCER_2A_INDEX,
+  ADVANCER_2B_INDEX,
+  ADVANCER_2C_INDEX,
+  ADVANCER_2D_INDEX,
+} from "./mondayMapping";
 import type { Patient } from "./workflow";
 
 const MAX_RETRIES = 2;
@@ -33,30 +39,139 @@ async function executeWithRetry(task: WriteTask): Promise<string | null> {
   return null;
 }
 
-/**
- * Push columns for a patient to Monday.
- * @param p - The patient to write
- * @param context - Which tab initiated the send (use for conditional logic)
- */
+export type TabContext = "evaluate" | "sendRequest" | "confirmReceipt" | "chase";
+
 export async function sendPatientToMonday(
   p: Patient,
-  context: "tab1" | "tab2" | "tab3" = "tab1",
+  context: TabContext,
 ): Promise<void> {
   const tasks: WriteTask[] = [];
 
-  // ---- Add your write tasks here ----
-  // Example:
-  // tasks.push({
-  //   label: "Some Status",
-  //   columnId: COL.someColumn,
-  //   fn: () => writeStatusIndex(p.id, COL.someColumn, SOME_INDEX.value),
-  // });
+  // ---- Tab-specific writes ----
 
-  if (typeof p.notes === "string" && p.notes.trim()) {
+  if (context === "evaluate") {
+    // Write MN Evaluation Notes
+    if (p.mnEvalNotes) {
+      tasks.push({
+        label: "MN Eval Notes",
+        columnId: COL.mnEvalNotes,
+        fn: () => writeLongText(p.id, COL.mnEvalNotes, p.mnEvalNotes!),
+      });
+    }
+    // Flip advancer 2A → Complete
     tasks.push({
-      label: "Notes",
-      columnId: COL.joshDebug,
-      fn: () => writeText(p.id, COL.joshDebug, p.notes),
+      label: "Advancer 2A",
+      columnId: COL.advancer2a,
+      fn: () => writeStatusIndex(p.id, COL.advancer2a, ADVANCER_2A_INDEX.complete),
+    });
+    // Advance sub-stage → 2B. Send Request
+    tasks.push({
+      label: "Sub-Stage → Send Request",
+      columnId: COL.subStage,
+      fn: () => writeStatusIndex(p.id, COL.subStage, SUB_STAGE_INDEX.sendRequest),
+    });
+  }
+
+  if (context === "sendRequest") {
+    // Write confirm/chase notes
+    if (p.confirmChaseNotes) {
+      tasks.push({
+        label: "Confirm/Chase Notes",
+        columnId: COL.confirmChaseNotes,
+        fn: () => writeText(p.id, COL.confirmChaseNotes, p.confirmChaseNotes!),
+      });
+    }
+    // Flip advancer 2B → Complete
+    tasks.push({
+      label: "Advancer 2B",
+      columnId: COL.advancer2b,
+      fn: () => writeStatusIndex(p.id, COL.advancer2b, ADVANCER_2B_INDEX.complete),
+    });
+    // Advance sub-stage → 2C. Confirm Receipt
+    tasks.push({
+      label: "Sub-Stage → Confirm Receipt",
+      columnId: COL.subStage,
+      fn: () => writeStatusIndex(p.id, COL.subStage, SUB_STAGE_INDEX.confirmReceipt),
+    });
+  }
+
+  if (context === "confirmReceipt") {
+    // Write receipt confirmed date
+    if (p.receiptConfirmedDate) {
+      tasks.push({
+        label: "Receipt Confirmed Date",
+        columnId: COL.receiptConfirmedDate,
+        fn: () => writeDate(p.id, COL.receiptConfirmedDate, p.receiptConfirmedDate!),
+      });
+    }
+    // Write receipt confirmed name
+    if (p.receiptConfirmedName) {
+      tasks.push({
+        label: "Receipt Confirmed Name",
+        columnId: COL.receiptConfirmedName,
+        fn: () => writeText(p.id, COL.receiptConfirmedName, p.receiptConfirmedName!),
+      });
+    }
+    // Write confirm receipt notes
+    if (p.confirmReceiptNotes) {
+      tasks.push({
+        label: "Confirm Receipt Notes",
+        columnId: COL.confirmReceiptNotes,
+        fn: () => writeText(p.id, COL.confirmReceiptNotes, p.confirmReceiptNotes!),
+      });
+    }
+    // Write confirm/chase notes
+    if (p.confirmChaseNotes) {
+      tasks.push({
+        label: "Confirm/Chase Notes",
+        columnId: COL.confirmChaseNotes,
+        fn: () => writeText(p.id, COL.confirmChaseNotes, p.confirmChaseNotes!),
+      });
+    }
+    // Flip advancer 2C → Complete
+    tasks.push({
+      label: "Advancer 2C",
+      columnId: COL.advancer2c,
+      fn: () => writeStatusIndex(p.id, COL.advancer2c, ADVANCER_2C_INDEX.complete),
+    });
+    // Advance sub-stage → 2D. Chase
+    tasks.push({
+      label: "Sub-Stage → Chase",
+      columnId: COL.subStage,
+      fn: () => writeStatusIndex(p.id, COL.subStage, SUB_STAGE_INDEX.chase),
+    });
+  }
+
+  if (context === "chase") {
+    // Write next action date
+    if (p.nextActionDate) {
+      tasks.push({
+        label: "Next Action Date",
+        columnId: COL.nextActionDate,
+        fn: () => writeDate(p.id, COL.nextActionDate, p.nextActionDate!),
+      });
+    }
+    // Write chase recipient name
+    if (p.chaseRecipientName) {
+      tasks.push({
+        label: "Chase Recipient Name",
+        columnId: COL.chaseRecipientName,
+        fn: () => writeText(p.id, COL.chaseRecipientName, p.chaseRecipientName!),
+      });
+    }
+    // Write confirm/chase notes
+    if (p.confirmChaseNotes) {
+      tasks.push({
+        label: "Confirm/Chase Notes",
+        columnId: COL.confirmChaseNotes,
+        fn: () => writeText(p.id, COL.confirmChaseNotes, p.confirmChaseNotes!),
+      });
+    }
+    // Flip advancer 2D → Complete
+    tasks.push({
+      label: "Advancer 2D",
+      columnId: COL.advancer2d,
+      fn: () => writeStatusIndex(p.id, COL.advancer2d, ADVANCER_2D_INDEX.complete),
     });
   }
 

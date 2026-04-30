@@ -1,35 +1,121 @@
-// ===== TEMPLATE: Monday API layer =====
-// Replace board ID, group IDs, and column IDs with your actual values.
+// Monday API layer for Medical Necessity board (18406060017)
 
 const MONDAY_API_URL = "https://api.monday.com/v2";
 const MONDAY_API_VERSION = "2024-10";
-const BOARD_ID = "REPLACE_WITH_BOARD_ID";
+const BOARD_ID = "18406060017";
 
-// ---- Groups on the board ----
 export const GROUPS = {
-  tab1: "REPLACE_WITH_GROUP_ID_1",
-  tab2: "REPLACE_WITH_GROUP_ID_2",
-  tab3: "REPLACE_WITH_GROUP_ID_3",
+  medicalNecessity: "group_mm1xf2jb",
 } as const;
 
-// ---- Column IDs ----
 export const COL = {
-  // Read columns (fetched on load)
-  // serving: "dropdown_xxxxx",
-  // primaryInsurance: "color_xxxxx",
+  // Demographics (read)
+  dob: "text_mm1xvxst",
+  phone: "phone_mm1x44yk",
+  primaryInsurance: "color_mm1x157j",
+  memberId1: "text_mm1x2qk2",
+  memberId2: "text_mm1xaccx",
+  serving: "color_mm1w1cm9",
+  referralType: "color_mm1wm4n4",
+  referralSource: "color_mm1w5wxr",
+  pumpType: "color_mm1wjjtk",
+  cgmType: "color_mm1w7pmf",
+  requestType: "color_mm1w1978",
 
-  // Write columns (written on send)
-  // someStatus: "color_xxxxx",
+  // Coverage paths
+  ipCoveragePath: "color_mm1w5xn1",
+  cgmCoveragePath: "color_mm1w7e5q",
 
-  // Debug / error logging
-  joshDebug: "REPLACE_WITH_DEBUG_COLUMN_ID",
+  // Doctor
+  doctorName: "text_mm1x46et",
+  doctorPhone: "phone_mm1xz8c0",
+  doctorNpi: "text_mm1x7d91",
+  clinicalsMethod: "color_mm1xw7y5",
+  doctorEmail: "email_mm1x6fq5",
+  doctorFax: "email_mm1xdzcj",
+  clinicName: "dropdown_mm1xbvas",
+
+  // Pipeline tracking
+  masterStage: "color_mm1ws96t",
+  subStage: "color_mm1wyr92",
+  daysSinceIntake: "color_mm1xwabn",
+  daysSinceStageStart: "color_mm1wwm05",
+  dateOfIntake: "date_mm1wf43j",
+  dateOfStageStart: "date_mm1w6jeq",
+
+  // Clinical eval checklist
+  cgmScript: "color_mm1w8mp1",
+  hypoLanguage: "color_mm1whggs",
+  insulinLanguage: "color_mm1wgrst",
+  ipScript: "color_mm1wsbk5",
+  diabetesEducation: "color_mm1wjsyq",
+  threeInjections: "color_mm1wj1v8",
+  cgmUse: "color_mm1wgpek",
+  bloodSugarIssues: "color_mm1wpcrd",
+  lmn: "color_mm1wdcsf",
+  oowDate: "color_mm1wmv5c",
+  malfunction: "color_mm1wp4e9",
+  diagnosis: "color_mm1wf7rv",
+
+  // MRs / Clinicals
+  mrsClinicals: "color_mm1y8rv8",
+  lastVisit: "date_mm1wb9br",
+  mrExpiryDate: "date_mm1ymthz",
+  clinicalFiles: "file_mm1w5vwp",
+  finalClinicals: "file_mm25m8c1",
+  medicalNecessity: "color_mm1y6qrf",
+  mnEvalNotes: "long_text_mm27zjt2",
+
+  // Script generation
+  generateCgmScript: "color_mm1w2ey",
+  cgmTemplate: "file_mm1wf720",
+  generateIpScript: "color_mm1w4wd8",
+  ipTemplate: "file_mm1wft5h",
+
+  // Confirm Receipt / Chase
+  confirmChaseNotes: "text_mm1wssm8",
+  confirmReceiptNotes: "text_mm1wbe5y",
+  receiptConfirmedDate: "date_mm1wxpdk",
+  receiptConfirmedName: "text_mm1wj9at",
+  chaseRecipientName: "text_mm1wabj9",
+  mnAttempts: "color_mm1wz0vg",
+  nextActionDate: "date_mm1wadgs",
+
+  // Advancers
+  advancer2a: "color_mm1w73jx",
+  advancer2b: "color_mm1wfbkz",
+  advancer2c: "color_mm1wf98t",
+  advancer2d: "color_mm1wcsbv",
+
+  // Debug
+  joshDebug: "text_mm2w1qn4",
 } as const;
 
-// Column IDs to fetch when loading patients
+// Columns to read on load — keep small to avoid 503
 export const READ_COLUMN_IDS: string[] = [
-  // COL.serving,
-  // COL.primaryInsurance,
-  // Add column IDs here — keep this array small to avoid 503 errors
+  COL.dob, COL.primaryInsurance, COL.memberId1, COL.memberId2,
+  COL.serving, COL.referralType, COL.referralSource,
+  COL.pumpType, COL.cgmType, COL.requestType,
+  COL.ipCoveragePath, COL.cgmCoveragePath,
+  COL.doctorName, COL.doctorNpi, COL.clinicalsMethod,
+  COL.doctorFax, COL.clinicName,
+  COL.masterStage, COL.subStage,
+  COL.daysSinceIntake, COL.daysSinceStageStart,
+  COL.dateOfIntake, COL.dateOfStageStart,
+  // Eval checklist
+  COL.cgmScript, COL.hypoLanguage, COL.insulinLanguage, COL.ipScript,
+  COL.diabetesEducation, COL.threeInjections, COL.cgmUse, COL.bloodSugarIssues,
+  COL.lmn, COL.oowDate, COL.malfunction, COL.diagnosis,
+  // MRs
+  COL.mrsClinicals, COL.medicalNecessity, COL.mnEvalNotes,
+  // Scripts
+  COL.generateCgmScript, COL.generateIpScript,
+  // Receipt / Chase
+  COL.confirmChaseNotes, COL.confirmReceiptNotes,
+  COL.receiptConfirmedName, COL.chaseRecipientName,
+  COL.mnAttempts, COL.nextActionDate,
+  // Advancers
+  COL.advancer2a, COL.advancer2b, COL.advancer2c, COL.advancer2d,
 ];
 
 export interface MondayColumnValue {
@@ -77,7 +163,7 @@ async function gql<T>(query: string, variables: Record<string, unknown> = {}): P
   return json.data as T;
 }
 
-export async function fetchGroupItems(groupId: string = GROUPS.tab1): Promise<MondayItem[]> {
+export async function fetchGroupItems(groupId: string = GROUPS.medicalNecessity): Promise<MondayItem[]> {
   const query = `
     query ($boardId: ID!, $cols: [String!]) {
       boards(ids: [$boardId]) {
@@ -117,17 +203,7 @@ export async function writeLongText(itemId: string, columnId: string, text: stri
   await gql(`mutation { change_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${JSON.stringify(value)}) { id } }`);
 }
 
-export async function writeDropdownIds(itemId: string, columnId: string, ids: number[]): Promise<void> {
-  const value = JSON.stringify({ ids });
-  await gql(`mutation { change_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${JSON.stringify(value)}) { id } }`);
-}
-
 export async function writeDate(itemId: string, columnId: string, dateStr: string): Promise<void> {
   const value = JSON.stringify({ date: dateStr });
-  await gql(`mutation { change_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${JSON.stringify(value)}) { id } }`);
-}
-
-export async function writeNumber(itemId: string, columnId: string, num: number): Promise<void> {
-  const value = JSON.stringify(String(num));
   await gql(`mutation { change_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${JSON.stringify(value)}) { id } }`);
 }

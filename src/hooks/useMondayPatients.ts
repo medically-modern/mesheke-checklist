@@ -5,9 +5,17 @@ import { mondayItemToPatient } from "@/lib/mondayMapping";
 
 const POLL_MS = 30_000;
 
-export type SidebarGroup = "tab1" | "tab2" | "tab3";
+export type TabKey = "evaluate" | "sendRequest" | "confirmReceipt" | "chase";
 
-export function useMondayPatients(activeGroup: SidebarGroup = "tab1") {
+// Sub-Stage text values that map to each tab
+const SUB_STAGE_FILTER: Record<TabKey, string> = {
+  evaluate: "2A. Evaluate Medical Necessity",
+  sendRequest: "2B. Send Request",
+  confirmReceipt: "2C. Confirm Receipt",
+  chase: "2D. Chase Clinicals",
+};
+
+export function useMondayPatients(activeTab: TabKey = "evaluate") {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,12 +35,17 @@ export function useMondayPatients(activeGroup: SidebarGroup = "tab1") {
       setError(null);
     }
     try {
-      const groupId = GROUPS[activeGroup];
-      const items = await fetchGroupItems(groupId);
+      // Always pull from the single MN group, then filter by sub-stage
+      const items = await fetchGroupItems(GROUPS.medicalNecessity);
       if (!mountedRef.current) return;
       const safeItems = Array.isArray(items) ? items : [];
-      const ps = safeItems.map(mondayItemToPatient);
-      const merged = ps.map((p) => {
+      const allPatients = safeItems.map(mondayItemToPatient);
+
+      // Filter to patients whose sub-stage matches this tab
+      const filterText = SUB_STAGE_FILTER[activeTab];
+      const filtered = allPatients.filter((p) => p.subStage === filterText);
+
+      const merged = filtered.map((p) => {
         const o = overlayRef.current.get(p.id);
         return o ? { ...p, ...o } : p;
       });
@@ -43,7 +56,7 @@ export function useMondayPatients(activeGroup: SidebarGroup = "tab1") {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [activeGroup]);
+  }, [activeTab]);
 
   useEffect(() => {
     mountedRef.current = true;

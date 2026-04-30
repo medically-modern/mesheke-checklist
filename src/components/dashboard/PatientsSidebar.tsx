@@ -1,10 +1,9 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -12,29 +11,17 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, User, AlertCircle, ArrowDownAZ } from "lucide-react";
+import { Loader2, RefreshCw, User, AlertCircle } from "lucide-react";
 import type { Patient } from "@/lib/workflow";
-import type { SidebarGroup as SidebarGroupType } from "@/hooks/useMondayPatients";
+import type { TabKey } from "@/hooks/useMondayPatients";
 import { cn } from "@/lib/utils";
 
-const GROUP_LABELS: Record<SidebarGroupType, string> = {
-  tab1: "Tab 1",
-  tab2: "Tab 2",
-  tab3: "Tab 3",
+const TAB_LABELS: Record<TabKey, string> = {
+  evaluate: "Evaluate MN",
+  sendRequest: "Send Request",
+  confirmReceipt: "Confirm Receipt",
+  chase: "Chase",
 };
-
-function groupByInsurance(patients: Patient[]): { label: string; patients: Patient[] }[] {
-  const map = new Map<string, Patient[]>();
-  for (const p of patients) {
-    const key = p.primaryInsurance || "Unknown";
-    const list = map.get(key);
-    if (list) list.push(p);
-    else map.set(key, [p]);
-  }
-  return Array.from(map.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([label, pts]) => ({ label, patients: pts }));
-}
 
 interface Props {
   patients: Patient[];
@@ -43,39 +30,14 @@ interface Props {
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
-  activeGroup: SidebarGroupType;
+  activeTab: TabKey;
 }
 
-export function PatientsSidebar({ patients, selectedId, onSelect, loading, error, onRefresh, activeGroup }: Props) {
+export function PatientsSidebar({ patients, selectedId, onSelect, loading, error, onRefresh, activeTab }: Props) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const [groupByIns, setGroupByIns] = useState(false);
 
-  const activeLabel = GROUP_LABELS[activeGroup];
-  const grouped = useMemo(() => groupByInsurance(patients), [patients]);
-
-  const renderPatient = (p: Patient) => (
-    <SidebarMenuItem key={p.id}>
-      <SidebarMenuButton
-        isActive={selectedId === p.id}
-        onClick={() => onSelect(p.id)}
-        className={cn(
-          "flex items-start gap-2 py-2 h-auto",
-          selectedId === p.id && "bg-sidebar-accent",
-        )}
-      >
-        <User className="h-4 w-4 mt-0.5 shrink-0" />
-        {!collapsed && (
-          <div className="min-w-0 text-left">
-            <p className="text-sm font-medium truncate">{p.name}</p>
-            <p className="text-[11px] text-muted-foreground truncate">
-              {p.primaryInsurance || "—"}
-            </p>
-          </div>
-        )}
-      </SidebarMenuButton>
-    </SidebarMenuItem>
-  );
+  const activeLabel = TAB_LABELS[activeTab];
 
   return (
     <Sidebar collapsible="icon">
@@ -88,17 +50,6 @@ export function PatientsSidebar({ patients, selectedId, onSelect, loading, error
             </div>
           )}
           <div className="flex items-center gap-1 shrink-0">
-            {!collapsed && (
-              <Button
-                variant={groupByIns ? "default" : "ghost"}
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setGroupByIns((v) => !v)}
-                title="Group by insurance"
-              >
-                <ArrowDownAZ className="h-4 w-4" />
-              </Button>
-            )}
             <Button
               variant="ghost"
               size="icon"
@@ -121,29 +72,37 @@ export function PatientsSidebar({ patients, selectedId, onSelect, loading, error
           </div>
         )}
 
-        {groupByIns && !collapsed ? (
-          grouped.map((g) => (
-            <SidebarGroup key={g.label}>
-              <SidebarGroupLabel className="text-[10px] uppercase tracking-wider">
-                {g.label} ({g.patients.length})
-              </SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>{g.patients.map(renderPatient)}</SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          ))
-        ) : (
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {patients.map(renderPatient)}
-                {!loading && patients.length === 0 && !error && !collapsed && (
-                  <p className="px-3 py-4 text-xs text-muted-foreground">No patients in {activeLabel} group.</p>
-                )}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {patients.map((p) => (
+                <SidebarMenuItem key={p.id}>
+                  <SidebarMenuButton
+                    isActive={selectedId === p.id}
+                    onClick={() => onSelect(p.id)}
+                    className={cn(
+                      "flex items-start gap-2 py-2 h-auto",
+                      selectedId === p.id && "bg-sidebar-accent",
+                    )}
+                  >
+                    <User className="h-4 w-4 mt-0.5 shrink-0" />
+                    {!collapsed && (
+                      <div className="min-w-0 text-left">
+                        <p className="text-sm font-medium truncate">{p.name}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {p.serving || "—"} · {p.daysSinceStageStart || "—"}
+                        </p>
+                      </div>
+                    )}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+              {!loading && patients.length === 0 && !error && !collapsed && (
+                <p className="px-3 py-4 text-xs text-muted-foreground">No patients in {activeLabel}.</p>
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
     </Sidebar>
   );

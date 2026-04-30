@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMondayPatients, type SidebarGroup } from "@/hooks/useMondayPatients";
+import { useMondayPatients, type TabKey } from "@/hooks/useMondayPatients";
 import type { Patient } from "@/lib/workflow";
-import { Tab1Panel } from "@/components/dashboard/Tab1Panel";
-import { Tab2Panel } from "@/components/dashboard/Tab2Panel";
-import { Tab3Panel } from "@/components/dashboard/Tab3Panel";
+import { EvaluatePanel } from "@/components/dashboard/EvaluatePanel";
+import { SendRequestPanel } from "@/components/dashboard/SendRequestPanel";
+import { ReceiptChasePanel } from "@/components/dashboard/ReceiptChasePanel";
 import { PatientsSidebar } from "@/components/dashboard/PatientsSidebar";
 import { PatientProfileCard } from "@/components/dashboard/PatientProfileCard";
 import { SendToMondayButton } from "@/components/dashboard/SendToMondayButton";
@@ -14,20 +14,16 @@ import { RotateCcw, Stethoscope } from "lucide-react";
 import { toast } from "sonner";
 import { sendPatientToMonday } from "@/lib/mondayWrite";
 
-const TAB_LABELS = {
-  tab1: "Tab 1",
-  tab2: "Tab 2",
-  tab3: "Tab 3",
-} as const;
-
-type TabKey = keyof typeof TAB_LABELS;
+const TAB_LABELS: Record<TabKey, string> = {
+  evaluate: "Evaluate",
+  sendRequest: "Send Request",
+  confirmReceipt: "Confirm Receipt",
+  chase: "Chase",
+};
 
 const Index = () => {
-  const [mainTab, setMainTab] = useState<TabKey>("tab1");
-
-  const activeGroup: SidebarGroup = mainTab;
-
-  const { patients, loading, error, refetch, update, clearOverlay } = useMondayPatients(activeGroup);
+  const [mainTab, setMainTab] = useState<TabKey>("evaluate");
+  const { patients, loading, error, refetch, update, clearOverlay } = useMondayPatients(mainTab);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const handleMainTabChange = (tab: string) => {
@@ -47,7 +43,6 @@ const Index = () => {
   const resetForNewPatient = () => {
     if (!selected) return;
     clearOverlay(selected.id);
-    update(selected.id, { notes: "" });
     toast.success("Cleared local edits — refetching from Monday");
     refetch();
   };
@@ -57,6 +52,8 @@ const Index = () => {
     try {
       await sendPatientToMonday(selected, mainTab);
       toast.success("Sent to Monday");
+      // Refetch after send since the patient will move to next sub-stage
+      setTimeout(refetch, 1000);
     } catch (e) {
       toast.error("Send to Monday failed", { description: e instanceof Error ? e.message : String(e) });
       throw e;
@@ -73,7 +70,7 @@ const Index = () => {
           loading={loading}
           error={error}
           onRefresh={refetch}
-          activeGroup={activeGroup}
+          activeTab={mainTab}
         />
 
         <Tabs value={mainTab} onValueChange={handleMainTabChange} className="flex-1 flex flex-col min-w-0">
@@ -104,10 +101,10 @@ const Index = () => {
           </header>
 
           <div className="flex justify-center py-3 border-b bg-background">
-            <TabsList className="grid w-full max-w-lg grid-cols-3">
-              <TabsTrigger value="tab1">{TAB_LABELS.tab1}</TabsTrigger>
-              <TabsTrigger value="tab2">{TAB_LABELS.tab2}</TabsTrigger>
-              <TabsTrigger value="tab3">{TAB_LABELS.tab3}</TabsTrigger>
+            <TabsList className="grid w-full max-w-2xl grid-cols-4">
+              {(Object.keys(TAB_LABELS) as TabKey[]).map((key) => (
+                <TabsTrigger key={key} value={key}>{TAB_LABELS[key]}</TabsTrigger>
+              ))}
             </TabsList>
           </div>
 
@@ -127,21 +124,41 @@ const Index = () => {
 
               {selected && (
                 <>
-                  <TabsContent value="tab1" className="space-y-5 mt-0">
+                  <TabsContent value="evaluate" className="space-y-5 mt-0">
                     <PatientProfileCard patient={selected} />
-                    <Tab1Panel patient={selected} />
+                    <EvaluatePanel
+                      patient={selected}
+                      onNotesChange={(v) => update(selected.id, { mnEvalNotes: v })}
+                    />
                     <SendToMondayButton onSend={handleSend} disabled={!selected} />
                   </TabsContent>
 
-                  <TabsContent value="tab2" className="space-y-5 mt-0">
+                  <TabsContent value="sendRequest" className="space-y-5 mt-0">
                     <PatientProfileCard patient={selected} />
-                    <Tab2Panel patient={selected} />
+                    <SendRequestPanel
+                      patient={selected}
+                      onNotesChange={(v) => update(selected.id, { confirmChaseNotes: v })}
+                    />
                     <SendToMondayButton onSend={handleSend} disabled={!selected} />
                   </TabsContent>
 
-                  <TabsContent value="tab3" className="space-y-5 mt-0">
+                  <TabsContent value="confirmReceipt" className="space-y-5 mt-0">
                     <PatientProfileCard patient={selected} />
-                    <Tab3Panel patient={selected} />
+                    <ReceiptChasePanel
+                      patient={selected}
+                      mode="confirmReceipt"
+                      onUpdate={(patch) => update(selected.id, patch)}
+                    />
+                    <SendToMondayButton onSend={handleSend} disabled={!selected} />
+                  </TabsContent>
+
+                  <TabsContent value="chase" className="space-y-5 mt-0">
+                    <PatientProfileCard patient={selected} />
+                    <ReceiptChasePanel
+                      patient={selected}
+                      mode="chase"
+                      onUpdate={(patch) => update(selected.id, patch)}
+                    />
                     <SendToMondayButton onSend={handleSend} disabled={!selected} />
                   </TabsContent>
                 </>
