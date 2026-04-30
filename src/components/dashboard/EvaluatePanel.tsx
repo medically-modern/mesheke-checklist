@@ -131,6 +131,15 @@ export function EvaluatePanel({ patient }: Props) {
     setState({});
   };
 
+  // Poll Monday's file columns every 2s while a Generate is in flight. Silent
+  // (no loading flicker) after the initial fetch. Declared early so the
+  // auto-clear effects below can reference mondayFiles.generateCgmStatus etc.
+  const isGenerating =
+    state.generateCgmScript === "Generate" || state.generateIpScript === "Generate";
+  const mondayFiles = useMondayFiles(patient.id, {
+    pollingIntervalMs: isGenerating ? 2000 : 0,
+  });
+
   // Generate button handlers — write the Monday status column so the
   // DocExport automation actually runs. The automation fires on a *change*
   // event, so if the column happens to already be on "Generate", a plain set
@@ -320,14 +329,6 @@ export function EvaluatePanel({ patient }: Props) {
     }, 600);
     return () => clearTimeout(id);
   }, [patient.id, preview.medicalNecessity, preview.generalMnInvalidReasons]);
-
-  // Poll Monday's file columns every 2s while the rep is waiting on a generated
-  // script template. Silent (no loading flicker) after the initial fetch.
-  const isGenerating =
-    state.generateCgmScript === "Generate" || state.generateIpScript === "Generate";
-  const mondayFiles = useMondayFiles(patient.id, {
-    pollingIntervalMs: isGenerating ? 2000 : 0,
-  });
 
   return (
     <div className="space-y-4">
