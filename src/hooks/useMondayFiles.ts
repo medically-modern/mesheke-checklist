@@ -1,8 +1,15 @@
 // Fetch the Monday file columns for one item: Clinical Files, Final Clinicals,
-// CGM Template, IP Template. Returned grouped by column id.
+// CGM Template, IP Template. Also reads the Generate CGM/IP Script status text
+// so the toggle can mirror Monday directly.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { COL, fetchItemFileColumns, hasToken, type MondayFileEntry } from "@/lib/mondayApi";
+import {
+  COL,
+  fetchItemColumnTexts,
+  fetchItemFileColumns,
+  hasToken,
+  type MondayFileEntry,
+} from "@/lib/mondayApi";
 
 const FILE_COLUMN_IDS = [
   COL.clinicalFiles,
@@ -11,11 +18,15 @@ const FILE_COLUMN_IDS = [
   COL.ipTemplate,
 ];
 
+const STATUS_COLUMN_IDS = [COL.generateCgmScript, COL.generateIpScript];
+
 export interface MondayFilesResult {
   clinicalFiles: MondayFileEntry[];
   finalClinicals: MondayFileEntry[];
   cgmTemplate: MondayFileEntry[];
   ipTemplate: MondayFileEntry[];
+  generateCgmStatus?: string;
+  generateIpStatus?: string;
   loading: boolean; // ONLY true on initial fetch (not background polling)
   error: string | null;
   refetch: () => void;
@@ -33,6 +44,7 @@ export function useMondayFiles(
   { pollingIntervalMs = 0 }: UseMondayFilesOptions = {},
 ): MondayFilesResult {
   const [data, setData] = useState<Record<string, MondayFileEntry[]>>({});
+  const [statuses, setStatuses] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
@@ -50,9 +62,13 @@ export function useMondayFiles(
     if (isInitial) setLoading(true);
     setError(null);
     try {
-      const result = await fetchItemFileColumns(itemId, FILE_COLUMN_IDS);
+      const [files, texts] = await Promise.all([
+        fetchItemFileColumns(itemId, FILE_COLUMN_IDS),
+        fetchItemColumnTexts(itemId, STATUS_COLUMN_IDS),
+      ]);
       if (mountedRef.current) {
-        setData(result);
+        setData(files);
+        setStatuses(texts);
         hasLoadedOnceRef.current = true;
       }
     } catch (e) {
@@ -67,6 +83,7 @@ export function useMondayFiles(
     mountedRef.current = true;
     hasLoadedOnceRef.current = false;
     setData({});
+    setStatuses({});
     if (itemId) refetch();
     return () => {
       mountedRef.current = false;
@@ -88,6 +105,8 @@ export function useMondayFiles(
     finalClinicals: data[COL.finalClinicals] ?? EMPTY,
     cgmTemplate: data[COL.cgmTemplate] ?? EMPTY,
     ipTemplate: data[COL.ipTemplate] ?? EMPTY,
+    generateCgmStatus: statuses[COL.generateCgmScript],
+    generateIpStatus: statuses[COL.generateIpScript],
     loading,
     error,
     refetch,

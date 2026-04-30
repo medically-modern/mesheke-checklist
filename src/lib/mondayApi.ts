@@ -201,6 +201,56 @@ export async function clearStatusColumn(itemId: string, columnId: string): Promi
   await gql(`mutation { change_simple_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${value}) { id } }`);
 }
 
+/** Set a status column by label (auto-creates the label if missing). */
+export async function writeStatusLabel(
+  itemId: string,
+  columnId: string,
+  label: string,
+): Promise<void> {
+  const value = JSON.stringify({ label });
+  await gql(
+    `mutation { change_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${JSON.stringify(value)}, create_labels_if_missing: true) { id } }`,
+  );
+}
+
+/** Set a multi-select dropdown column by an array of labels. */
+export async function writeDropdownLabels(
+  itemId: string,
+  columnId: string,
+  labels: string[],
+): Promise<void> {
+  const value = JSON.stringify({ labels });
+  await gql(
+    `mutation { change_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${JSON.stringify(value)}, create_labels_if_missing: true) { id } }`,
+  );
+}
+
+/** Read raw text values for a list of columns. */
+export async function fetchItemColumnTexts(
+  itemId: string,
+  columnIds: string[],
+): Promise<Record<string, string>> {
+  if (columnIds.length === 0) return {};
+  const query = `
+    query ($itemId: [ID!]!, $columnIds: [String!]!) {
+      items(ids: $itemId) {
+        column_values(ids: $columnIds) {
+          id
+          text
+        }
+      }
+    }
+  `;
+  const data = await gql<{
+    items: { column_values: { id: string; text: string | null }[] }[];
+  }>(query, { itemId: [itemId], columnIds });
+  const out: Record<string, string> = {};
+  for (const cv of data.items?.[0]?.column_values ?? []) {
+    if (cv.text != null) out[cv.id] = cv.text;
+  }
+  return out;
+}
+
 export async function writeText(itemId: string, columnId: string, text: string): Promise<void> {
   const value = JSON.stringify(text);
   await gql(`mutation { change_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${JSON.stringify(value)}) { id } }`);

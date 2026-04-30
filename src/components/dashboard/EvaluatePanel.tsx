@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback, type DragEvent } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, type DragEvent } from "react";
 import type { Patient } from "@/lib/workflow";
 import { StatusSelect } from "./StatusSelect";
 import { Input } from "@/components/ui/input";
@@ -56,7 +56,10 @@ import {
   clearStatusColumn,
   deleteFileFromColumn,
   hasToken,
+  writeDate,
+  writeDropdownLabels,
   writeStatusIndex,
+  writeStatusLabel,
   type MondayFileEntry,
 } from "@/lib/mondayApi";
 import { GEN_SCRIPT_STATUS } from "@/lib/mondayMapping";
@@ -172,12 +175,151 @@ export function EvaluatePanel({ patient }: Props) {
     [triggerGenerate],
   );
 
+  // Auto-clear local Generate state when Monday's column transitions away from
+  // "Generate" — i.e. when Brandon's automation flips it back to Ready after
+  // DocExport completes.
+  const prevCgmStatusRef = useRef<string | undefined>(undefined);
+  const prevIpStatusRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevCgmStatusRef.current;
+    const curr = mondayFiles.generateCgmStatus;
+    if (prev === "Generate" && curr && curr !== "Generate") {
+      update("generateCgmScript", undefined);
+    }
+    prevCgmStatusRef.current = curr;
+  }, [mondayFiles.generateCgmStatus, update]);
+  useEffect(() => {
+    const prev = prevIpStatusRef.current;
+    const curr = mondayFiles.generateIpStatus;
+    if (prev === "Generate" && curr && curr !== "Generate") {
+      update("generateIpScript", undefined);
+    }
+    prevIpStatusRef.current = curr;
+  }, [mondayFiles.generateIpStatus, update]);
+
+  // Generic writer for status (single-label) columns. Writes label or clears.
+  const writeStatus = useCallback(
+    async (columnId: string, label: string | undefined | null) => {
+      if (!hasToken()) return;
+      try {
+        if (!label) {
+          await clearStatusColumn(patient.id, columnId);
+        } else {
+          await writeStatusLabel(patient.id, columnId, label);
+        }
+      } catch (e) {
+        toast.error("Couldn't save to Monday", {
+          description: e instanceof Error ? e.message : String(e),
+        });
+      }
+    },
+    [patient.id],
+  );
+
+  // Writer for multi-select dropdown columns.
+  const writeDropdown = useCallback(
+    async (columnId: string, labels: string[]) => {
+      if (!hasToken()) return;
+      try {
+        await writeDropdownLabels(patient.id, columnId, labels);
+      } catch (e) {
+        toast.error("Couldn't save reasons to Monday", {
+          description: e instanceof Error ? e.message : String(e),
+        });
+      }
+    },
+    [patient.id],
+  );
+
+  // Writer for date columns.
+  const writeDateField = useCallback(
+    async (columnId: string, dateStr: string | undefined) => {
+      if (!hasToken()) return;
+      try {
+        if (!dateStr) await clearStatusColumn(patient.id, columnId);
+        else await writeDate(patient.id, columnId, dateStr);
+      } catch (e) {
+        toast.error("Couldn't save date to Monday", {
+          description: e instanceof Error ? e.message : String(e),
+        });
+      }
+    },
+    [patient.id],
+  );
+
+  // Field-specific update wrappers: update local state + write to Monday.
+  const setIpCoveragePath = useCallback(
+    (v: IpPath | undefined) => {
+      update("ipCoveragePath", v);
+      void writeStatus(COL.ipCoveragePath, v);
+    },
+    [update, writeStatus],
+  );
+  const setCgmCoveragePath = useCallback(
+    (v: CgmCoveragePath | undefined) => {
+      update("cgmCoveragePath", v);
+      void writeStatus(COL.cgmCoveragePath, v);
+    },
+    [update, writeStatus],
+  );
+  const setDiagnosis = useCallback(
+    (v: string) => {
+      update("diagnosis", v);
+      void writeStatus(COL.diagnosis, v || null);
+    },
+    [update, writeStatus],
+  );
+  const setMrReceived = useCallback(
+    (v: YesNo | undefined) => {
+      update("mrReceived", v);
+      // Map Yes/No → MR Received / Collect on the MRs/Clinicals column
+      const label = v === "Yes" ? "MR Received" : v === "No" ? "Collect" : null;
+      void writeStatus(COL.mrsClinicals, label);
+    },
+    [update, writeStatus],
+  );
+  const setLastVisitDate = useCallback(
+    (v: string) => {
+      update("lastVisitDate", v);
+      void writeDateField(COL.lastVisit, v);
+      // Auto-derived MR expiry too
+      const { expiry } = getMrExpiry(v);
+      void writeDateField(COL.mrExpiryDate, expiry ? expiry.toISOString().slice(0, 10) : undefined);
+    },
+    [update, writeDateField],
+  );
+
   const validity = useMemo(
     () => deriveValidity(state, patient, showCgm, showIp),
     [state, patient, showCgm, showIp],
   );
 
   const preview = useMemo(() => buildMondayPreview(state, validity), [state, validity]);
+
+  // Write derived Medical Necessity + General MN Invalid Reasons to Monday
+  // whenever the validity rollup changes. Debounced so we don't spam writes.
+  const lastWrittenRef = useRef<{ mn?: string; reasons?: string }>({});
+  useEffect(() => {
+    if (!hasToken()) return;
+    const mn = preview.medicalNecessity;
+    const reasonsKey = preview.generalMnInvalidReasons.join("|");
+    const last = lastWrittenRef.current;
+    const id = setTimeout(() => {
+      if (last.mn !== mn) {
+        void writeStatusLabel(patient.id, COL.medicalNecessity, mn).catch(() => {});
+        lastWrittenRef.current.mn = mn;
+      }
+      if (last.reasons !== reasonsKey) {
+        void writeDropdownLabels(
+          patient.id,
+          COL.generalMnInvalidReasons,
+          preview.generalMnInvalidReasons,
+        ).catch(() => {});
+        lastWrittenRef.current.reasons = reasonsKey;
+      }
+    }, 600);
+    return () => clearTimeout(id);
+  }, [patient.id, preview.medicalNecessity, preview.generalMnInvalidReasons]);
 
   // Poll Monday's file columns every 2s while the rep is waiting on a generated
   // script template. Silent (no loading flicker) after the initial fetch.
@@ -204,13 +346,13 @@ export function EvaluatePanel({ patient }: Props) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
           <DiagnosisField
             value={state.diagnosis}
-            onChange={(v) => update("diagnosis", v)}
+            onChange={(v) => setDiagnosis(v)}
           />
           <StatusSelect
             label="MRs Received"
             value={state.mrReceived}
             options={YES_NO_OPTS}
-            onChange={(v) => update("mrReceived", v as YesNo)}
+            onChange={(v) => setMrReceived(v as YesNo)}
           />
         </div>
 
@@ -218,7 +360,7 @@ export function EvaluatePanel({ patient }: Props) {
           <DateField
             label="Last Visit Date"
             value={state.lastVisitDate}
-            onChange={(v) => update("lastVisitDate", v)}
+            onChange={(v) => setLastVisitDate(v)}
           />
           <MrExpiryField lastVisit={state.lastVisitDate} />
         </div>
@@ -241,15 +383,18 @@ export function EvaluatePanel({ patient }: Props) {
               label="Coverage Path"
               value={state.cgmCoveragePath}
               options={CGM_COVERAGE_OPTS}
-              onChange={(v) => update("cgmCoveragePath", v as CgmCoveragePath)}
+              onChange={(v) => setCgmCoveragePath(v as CgmCoveragePath)}
             />
           </div>
           <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 items-center">
             <GenerateScriptToggle
               label="Generate CGM Script"
-              value={state.generateCgmScript}
-              onChange={handleGenerateCgm}
-              templateAvailable={mondayFiles.cgmTemplate.length > 0}
+              isGenerating={
+                state.generateCgmScript === "Generate" ||
+                mondayFiles.generateCgmStatus === "Generate"
+              }
+              onGenerate={() => handleGenerateCgm("Generate")}
+              onCancel={() => handleGenerateCgm(undefined)}
             />
             <MondayScriptViewer
               label="CGM script template"
@@ -280,15 +425,18 @@ export function EvaluatePanel({ patient }: Props) {
               label="Insulin Pump Coverage Path"
               value={state.ipCoveragePath}
               options={IP_PATH_OPTS}
-              onChange={(v) => update("ipCoveragePath", v as IpPath)}
+              onChange={(v) => setIpCoveragePath(v as IpPath)}
             />
           </div>
           <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 items-center">
             <GenerateScriptToggle
               label="Generate Insulin Pump Script"
-              value={state.generateIpScript}
-              onChange={handleGenerateIp}
-              templateAvailable={mondayFiles.ipTemplate.length > 0}
+              isGenerating={
+                state.generateIpScript === "Generate" ||
+                mondayFiles.generateIpStatus === "Generate"
+              }
+              onGenerate={() => handleGenerateIp("Generate")}
+              onCancel={() => handleGenerateIp(undefined)}
             />
             <MondayScriptViewer
               label="Insulin Pump script template"
@@ -657,51 +805,17 @@ function DiagnosisField({ value, onChange }: DiagnosisFieldProps) {
 
 interface GenerateScriptToggleProps {
   label: string;
-  value?: string;
-  onChange: (v: string | undefined) => void;
-  templateAvailable: boolean; // true once Monday's template column has a file
+  isGenerating: boolean;
+  onGenerate: () => void;
+  onCancel: () => void;
 }
-
-const GENERATE_MIN_WAIT_MS = 10_000;
 
 function GenerateScriptToggle({
   label,
-  value,
-  onChange,
-  templateAvailable,
+  isGenerating,
+  onGenerate,
+  onCancel,
 }: GenerateScriptToggleProps) {
-  const isGenerating = value === "Generate";
-  const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [, forceTick] = useState(0);
-
-  // Start the timer when generating begins; reset when it ends.
-  useEffect(() => {
-    if (!isGenerating) {
-      setStartedAt(null);
-      return;
-    }
-    if (startedAt === null) setStartedAt(Date.now());
-  }, [isGenerating, startedAt]);
-
-  // While generating: re-render once after the 10s minimum-wait elapses so the
-  // auto-revert effect below can re-evaluate. Polling for Monday's template
-  // file lives in useMondayFiles (silent — no spinner flicker).
-  useEffect(() => {
-    if (!isGenerating || startedAt === null) return;
-    const elapsed = Date.now() - startedAt;
-    if (elapsed >= GENERATE_MIN_WAIT_MS) return;
-    const id = setTimeout(() => forceTick((t) => t + 1), GENERATE_MIN_WAIT_MS - elapsed);
-    return () => clearTimeout(id);
-  }, [isGenerating, startedAt]);
-
-  useEffect(() => {
-    if (!isGenerating || startedAt === null) return;
-    const elapsed = Date.now() - startedAt;
-    if (elapsed >= GENERATE_MIN_WAIT_MS && templateAvailable) {
-      onChange(undefined);
-    }
-  }, [isGenerating, startedAt, templateAvailable, onChange]);
-
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50">
       <span className="text-sm text-muted-foreground whitespace-nowrap">{label}</span>
@@ -714,7 +828,7 @@ function GenerateScriptToggle({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onChange(undefined)}
+            onClick={onCancel}
             className="h-8 px-2 text-xs"
             title="Cancel"
           >
@@ -724,7 +838,7 @@ function GenerateScriptToggle({
       ) : (
         <Button
           size="sm"
-          onClick={() => onChange("Generate")}
+          onClick={onGenerate}
           className="h-8 px-3 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
         >
           <FileText className="h-3 w-3" />
