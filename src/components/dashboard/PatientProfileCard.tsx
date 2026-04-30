@@ -1,5 +1,6 @@
 import type { Patient } from "@/lib/workflow";
 import { CalendarDays, IdCard, User, Stethoscope, ShieldCheck, Clock, UserRound } from "lucide-react";
+import { ClinicalsDownloadButton } from "./ClinicalsDownloadButton";
 
 interface Props {
   patient: Patient;
@@ -22,7 +23,10 @@ function Field({ icon, label, value }: { icon: React.ReactNode; label: string; v
 export function PatientProfileCard({ patient }: Props) {
   return (
     <div className="rounded-xl bg-card border shadow-card p-4 space-y-4">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground">Patient Profile</p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">Patient Profile</p>
+        <ClinicalsDownloadButton itemId={patient.id} patientName={patient.name} />
+      </div>
 
       {/* Row 1: Identity */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -77,10 +77,10 @@ export function ReceiptChasePanel({ patient, mode, onUpdate }: Props) {
         )}
       </div>
 
-      {/* Notes */}
+      {/* Notes - unified label */}
       <div className="rounded-xl bg-card border shadow-card p-5">
         <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-          {isChase ? "Chase Notes" : "Confirm / Chase Notes"}
+          Confirming & Chasing Clinicals Notes
         </p>
         <Textarea
           value={patient.confirmChaseNotes ?? ""}

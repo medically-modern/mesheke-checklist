@@ -97,14 +97,6 @@ export async function sendPatientToMonday(
     // MR + MedNec
     pushStatus(tasks, p.id, "MRs / Clinicals", COL.mrsClinicals, p.mrsClinicals, MR_OPTS);
     pushStatus(tasks, p.id, "Medical Necessity", COL.medicalNecessity, p.medicalNecessity, MED_NEC_OPTS);
-    // Notes
-    if (p.mnEvalNotes) {
-      tasks.push({
-        label: "MN Eval Notes",
-        columnId: COL.mnEvalNotes,
-        fn: () => writeLongText(p.id, COL.mnEvalNotes, p.mnEvalNotes!),
-      });
-    }
     // Advancer 2A → Complete + Sub-Stage → 2B
     tasks.push({
       label: "Advancer 2A",
@@ -159,13 +151,6 @@ export async function sendPatientToMonday(
         label: "Receipt Confirmed Name",
         columnId: COL.receiptConfirmedName,
         fn: () => writeText(p.id, COL.receiptConfirmedName, p.receiptConfirmedName!),
-      });
-    }
-    if (p.confirmReceiptNotes) {
-      tasks.push({
-        label: "Confirm Receipt Notes",
-        columnId: COL.confirmReceiptNotes,
-        fn: () => writeText(p.id, COL.confirmReceiptNotes, p.confirmReceiptNotes!),
       });
     }
     if (p.confirmChaseNotes) {

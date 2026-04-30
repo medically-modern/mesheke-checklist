@@ -207,3 +207,35 @@ export async function writeDate(itemId: string, columnId: string, dateStr: strin
   const value = JSON.stringify({ date: dateStr });
   await gql(`mutation { change_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${JSON.stringify(value)}) { id } }`);
 }
+
+// ---- File asset helpers ----
+
+export interface MondayAsset {
+  id: string;
+  name: string;
+  url: string;
+  public_url: string;
+}
+
+export async function fetchItemAssets(itemId: string): Promise<MondayAsset[]> {
+  const query = `
+    query ($boardId: ID!, $itemId: ID!) {
+      boards(ids: [$boardId]) {
+        items_page(query_params: { ids: [$itemId] }) {
+          items {
+            assets(assets_source: all) {
+              id
+              name
+              url
+              public_url
+            }
+          }
+        }
+      }
+    }
+  `;
+  const data = await gql<{
+    boards: { items_page: { items: { assets: MondayAsset[] }[] } }[];
+  }>(query, { boardId: BOARD_ID, itemId });
+  return data.boards?.[0]?.items_page?.items?.[0]?.assets ?? [];
+}

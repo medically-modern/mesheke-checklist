@@ -1,6 +1,5 @@
 import type { Patient } from "@/lib/workflow";
 import { StatusSelect } from "./StatusSelect";
-import { Textarea } from "@/components/ui/textarea";
 import {
   STANDARD_EVAL,
   LANGUAGE_OPTS,
@@ -52,19 +51,6 @@ export function EvaluatePanel({ patient, onUpdate }: Props) {
           <StatusSelect label="MRs / Clinicals" value={patient.mrsClinicals} options={MR_OPTS} onChange={(v) => onUpdate({ mrsClinicals: v })} />
           <StatusSelect label="Medical Necessity" value={patient.medicalNecessity} options={MED_NEC_OPTS} onChange={(v) => onUpdate({ medicalNecessity: v })} />
         </div>
-      </div>
-
-      {/* MN Evaluation Notes */}
-      <div className="rounded-xl bg-card border shadow-card p-5">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-          MN Evaluation Notes
-        </p>
-        <Textarea
-          value={patient.mnEvalNotes ?? ""}
-          onChange={(e) => onUpdate({ mnEvalNotes: e.target.value })}
-          placeholder="Add evaluation notes..."
-          className="min-h-[100px] text-sm"
-        />
       </div>
     </div>
   );
