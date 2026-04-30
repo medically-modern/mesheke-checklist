@@ -1227,11 +1227,6 @@ function MondayPreviewPanel({ preview }: { preview: ReturnType<typeof buildMonda
           <ColRow
             label="Medical Necessity"
             value={preview.medicalNecessity}
-            valueClass={
-              preview.medicalNecessity === "Established"
-                ? "text-emerald-700 font-medium"
-                : "text-red-700 font-medium"
-            }
           />
           <ReasonsRow label="General MN Invalid Reasons" reasons={preview.generalMnInvalidReasons} />
           <ReasonsRow label="CGM MN Invalid Reasons" reasons={preview.cgmMnInvalidReasons} />
@@ -1248,20 +1243,62 @@ function MondayPreviewPanel({ preview }: { preview: ReturnType<typeof buildMonda
   );
 }
 
+function getBadgeClass(label: string, value: string): string | null {
+  // CGM Coverage Path: Insulin dark blue, Hypo light blue
+  if (label === "CGM Coverage Path") {
+    if (value === "Insulin") return "bg-blue-100 text-blue-900 border-blue-300";
+    if (value === "Hypo") return "bg-sky-100 text-sky-900 border-sky-300";
+    if (value === "Invalid") return "bg-red-100 text-red-900 border-red-300";
+    if (value === "Not Serving") return "bg-gray-100 text-gray-700 border-gray-300";
+  }
+  // Insulin Pump Coverage Path: subtle indigo for paths, gray for Not Serving
+  if (label === "Insulin Pump Coverage Path") {
+    if (value === "Not Serving") return "bg-gray-100 text-gray-700 border-gray-300";
+    return "bg-indigo-100 text-indigo-900 border-indigo-300";
+  }
+  // MRs / Clinicals: green for received, orange for collect
+  if (label === "MRs / Clinicals") {
+    if (value === "MR Received") return "bg-emerald-100 text-emerald-900 border-emerald-300";
+    if (value === "Collect") return "bg-orange-100 text-orange-900 border-orange-300";
+  }
+  // Medical Necessity: green established, orange not established
+  if (label === "Medical Necessity") {
+    if (value === "Established") return "bg-emerald-100 text-emerald-900 border-emerald-300";
+    if (value === "Not Established") return "bg-orange-100 text-orange-900 border-orange-300";
+  }
+  // Generate Script status: amber pill while triggered
+  if (label.startsWith("Generate ") && value === "Generate") {
+    return "bg-amber-100 text-amber-900 border-amber-300";
+  }
+  return null;
+}
+
 function ColRow({
   label,
   value,
-  valueClass,
 }: {
   label: string;
   value?: string;
-  valueClass?: string;
 }) {
+  const badge = value ? getBadgeClass(label, value) : null;
   return (
     <tr>
       <td className="text-muted-foreground w-[180px] whitespace-nowrap">{label}</td>
-      <td className={cn("font-medium", valueClass, !value && "text-muted-foreground/60 italic")}>
-        {value || "—"}
+      <td>
+        {!value ? (
+          <span className="text-muted-foreground/60 italic">—</span>
+        ) : badge ? (
+          <span
+            className={cn(
+              "inline-flex items-center text-xs font-medium border rounded-md px-2 py-0.5",
+              badge,
+            )}
+          >
+            {value}
+          </span>
+        ) : (
+          <span className="font-medium">{value}</span>
+        )}
       </td>
     </tr>
   );
