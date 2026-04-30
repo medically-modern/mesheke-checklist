@@ -25,7 +25,7 @@ function badgeColor(val?: string): string {
   if (v === "collect") return "border-amber-300 bg-amber-50";
   if (v === "evaluate" || v === "generate") return "border-blue-300 bg-blue-50";
   if (v === "not serving" || v === "not needed") return "border-gray-200 bg-gray-50";
-  if (v === "invalid" || v === "no" || v === "yes, but invalid" || v === "not established" || v === "escalate" || v === "stuck") return "border-red-300 bg-red-50";
+  if (v === "invalid" || v === "missing" || v === "no" || v === "yes, but invalid" || v === "not established" || v === "escalate" || v === "stuck") return "border-red-300 bg-red-50";
   if (v === "insulin") return "border-sky-300 bg-sky-50";
   if (v === "hypo") return "border-violet-300 bg-violet-50";
   if (v.startsWith("attempt")) return "border-blue-200 bg-blue-50";

@@ -6,7 +6,7 @@ import type { IpPath } from "./ipPaths";
 import { IP_PATH_FIELDS } from "./ipPaths";
 import type { Patient } from "./workflow";
 
-export type ValidInvalid = "Valid" | "Invalid";
+export type ValidInvalid = "Valid" | "Invalid" | "Missing";
 export type YesNo = "Yes" | "No";
 export type CgmCoveragePath = "Insulin" | "Hypo" | "Invalid";
 export type LmnStatus = "Yes & Valid" | "Yes, but Invalid" | "No";
@@ -137,11 +137,9 @@ export function deriveValidity(
   if (showCgm) {
     if (state.cgmScriptValid !== "Valid") {
       cgmValid = false;
-      cgmReasons.push(
-        state.cgmScriptValid === "Invalid"
-          ? "CGM Script invalid"
-          : "CGM Script not validated",
-      );
+      if (state.cgmScriptValid === "Invalid") cgmReasons.push("CGM Script invalid");
+      else if (state.cgmScriptValid === "Missing") cgmReasons.push("CGM Script missing");
+      else cgmReasons.push("CGM Script not validated");
     }
     if (!state.cgmCoveragePath) {
       cgmValid = false;
@@ -157,16 +155,14 @@ export function deriveValidity(
   if (showIp) {
     if (!state.ipCoveragePath) {
       ipValid = false;
-      ipReasons.push("IP Coverage Path not selected");
+      ipReasons.push("Insulin Pump Coverage Path not selected");
     } else {
       const cfg = IP_PATH_FIELDS[state.ipCoveragePath];
       if (state.ipScriptValid !== "Valid") {
         ipValid = false;
-        ipReasons.push(
-          state.ipScriptValid === "Invalid"
-            ? "IP Script invalid"
-            : "IP Script not validated",
-        );
+        if (state.ipScriptValid === "Invalid") ipReasons.push("Insulin Pump Script invalid");
+        else if (state.ipScriptValid === "Missing") ipReasons.push("Insulin Pump Script missing");
+        else ipReasons.push("Insulin Pump Script not validated");
       }
       if (cfg.showEducation && state.diabetesEducation !== "Yes") {
         ipValid = false;
@@ -262,6 +258,15 @@ export function buildMondayPreview(
   validity: ValidityResult,
 ): MondayPreview {
   const { expiry } = getMrExpiry(state.lastVisitDate);
+  // General reasons (Diagnosis missing, MR not received, MR expired, Last Visit
+  // not set) are mirrored into both CGM and IP invalid-reason columns when
+  // those sections are being served.
+  const cgmCombined = validity.sections.cgm.shown
+    ? [...validity.cgmReasons, ...validity.generalReasons]
+    : [];
+  const ipCombined = validity.sections.ip.shown
+    ? [...validity.ipReasons, ...validity.generalReasons]
+    : [];
   return {
     ipCoveragePath: state.ipCoveragePath,
     cgmCoveragePath: state.cgmCoveragePath,
@@ -270,8 +275,8 @@ export function buildMondayPreview(
     lastVisitDate: state.lastVisitDate,
     mrExpiryDate: expiry ? expiry.toISOString().slice(0, 10) : undefined,
     medicalNecessity: validity.established ? "Established" : "Not Established",
-    cgmMnInvalidReasons: validity.cgmReasons,
-    ipMnInvalidReasons: validity.ipReasons,
+    cgmMnInvalidReasons: cgmCombined,
+    ipMnInvalidReasons: ipCombined,
     generateCgmScript: state.generateCgmScript,
     generateIpScript: state.generateIpScript,
   };

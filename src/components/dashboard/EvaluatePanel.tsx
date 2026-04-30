@@ -166,7 +166,7 @@ export function EvaluatePanel({ patient }: Props) {
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
             <StatusSelect
-              label="Valid CGM Script"
+              label="CGM Script"
               value={state.cgmScriptValid}
               options={VALID_INVALID_OPTS}
               onChange={(v) => update("cgmScriptValid", v as ValidInvalid)}
@@ -184,7 +184,7 @@ export function EvaluatePanel({ patient }: Props) {
               value={state.generateCgmScript}
               onChange={(v) => update("generateCgmScript", v)}
             />
-            <MondayScriptViewer label="CGM Script" file={null} />
+            <MondayScriptViewer label="CGM script template" file={null} />
           </div>
         </SectionCard>
       )}
@@ -197,25 +197,25 @@ export function EvaluatePanel({ patient }: Props) {
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 mb-2">
             <StatusSelect
-              label="IP Coverage Path"
-              value={state.ipCoveragePath}
-              options={IP_PATH_OPTS}
-              onChange={(v) => update("ipCoveragePath", v as IpPath)}
-            />
-            <StatusSelect
-              label="Valid IP Script"
+              label="Insulin Pump Script"
               value={state.ipScriptValid}
               options={VALID_INVALID_OPTS}
               onChange={(v) => update("ipScriptValid", v as ValidInvalid)}
             />
+            <StatusSelect
+              label="Insulin Pump Coverage Path"
+              value={state.ipCoveragePath}
+              options={IP_PATH_OPTS}
+              onChange={(v) => update("ipCoveragePath", v as IpPath)}
+            />
           </div>
           <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 items-center">
             <GenerateScriptToggle
-              label="Generate IP Script"
+              label="Generate Insulin Pump Script"
               value={state.generateIpScript}
               onChange={(v) => update("generateIpScript", v)}
             />
-            <MondayScriptViewer label="IP Script" file={null} />
+            <MondayScriptViewer label="Insulin Pump script template" file={null} />
           </div>
 
           {state.ipCoveragePath && (
@@ -626,7 +626,7 @@ function MondayScriptViewer({ label, file }: MondayScriptViewerProps) {
       <div className="flex items-center justify-between gap-2 px-3 h-9 rounded-md border border-dashed bg-muted/20 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
           <FileText className="h-3 w-3" />
-          No {label} on Monday yet
+          No {label} found
         </span>
         <Button variant="ghost" size="sm" disabled className="h-7 px-2 text-[11px]">
           View
@@ -766,7 +766,7 @@ function ValiditySummary({ validity, preview, onClearLocal }: ValiditySummaryPro
       {/* Section pills + MN status */}
       <div className="flex items-center gap-2 flex-wrap">
         <SectionPill label="CGM" status={validity.sections.cgm} />
-        <SectionPill label="IP" status={validity.sections.ip} />
+        <SectionPill label="Insulin Pump" status={validity.sections.ip} />
         <SectionPill
           label="Diagnosis"
           status={{ shown: true, valid: validity.sections.diagnosis.valid }}
@@ -807,7 +807,7 @@ function MondayPreviewPanel({ preview }: { preview: ReturnType<typeof buildMonda
     <div className="rounded-md border bg-muted/20 overflow-hidden">
       <table className="w-full text-xs">
         <tbody className="[&>tr]:border-t [&>tr:first-child]:border-t-0 [&>tr>td]:px-3 [&>tr>td]:py-2 [&>tr>td]:align-top">
-          <ColRow label="IP Coverage Path" value={preview.ipCoveragePath} />
+          <ColRow label="Insulin Pump Coverage Path" value={preview.ipCoveragePath} />
           <ColRow label="CGM Coverage Path" value={preview.cgmCoveragePath} />
           <ColRow label="Diagnosis" value={preview.diagnosis} />
           <ColRow label="MRs / Clinicals" value={preview.mrsClinicals} />
@@ -823,12 +823,12 @@ function MondayPreviewPanel({ preview }: { preview: ReturnType<typeof buildMonda
             }
           />
           <ReasonsRow label="CGM MN Invalid Reasons" reasons={preview.cgmMnInvalidReasons} />
-          <ReasonsRow label="IP MN Invalid Reasons" reasons={preview.ipMnInvalidReasons} />
+          <ReasonsRow label="Insulin Pump MN Invalid Reasons" reasons={preview.ipMnInvalidReasons} />
           {preview.generateCgmScript && (
             <ColRow label="Generate CGM Script" value={preview.generateCgmScript} />
           )}
           {preview.generateIpScript && (
-            <ColRow label="Generate IP Script" value={preview.generateIpScript} />
+            <ColRow label="Generate Insulin Pump Script" value={preview.generateIpScript} />
           )}
         </tbody>
       </table>
