@@ -122,7 +122,7 @@ export function EvaluatePanel({ patient }: Props) {
   const preview = useMemo(() => buildMondayPreview(state, validity), [state, validity]);
 
   return (
-    <div className="space-y-4 pb-32">
+    <div className="space-y-4">
       {/* Banner: Serving forces a path */}
       {!showCgm && !showIp && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
@@ -742,72 +742,69 @@ interface ValiditySummaryProps {
 }
 
 function ValiditySummary({ validity, preview, onClearLocal }: ValiditySummaryProps) {
-  const [showPreview, setShowPreview] = useState(true);
-
   return (
-    <div className="fixed bottom-0 left-0 right-0 sm:left-[var(--sidebar-width,16rem)] z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="max-w-5xl mx-auto px-6 py-3 space-y-2">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3 flex-wrap">
-            <SectionPill label="CGM" status={validity.sections.cgm} />
-            <SectionPill label="IP" status={validity.sections.ip} />
-            <SectionPill
-              label="Diagnosis"
-              status={{ shown: true, valid: validity.sections.diagnosis.valid }}
-            />
-            <SectionPill
-              label="MR"
-              status={{ shown: true, valid: validity.sections.mr.valid }}
-            />
-            <span className="text-sm">
-              →{" "}
-              {validity.established ? (
-                <strong className="text-emerald-700">Medical Necessity: Established</strong>
-              ) : (
-                <strong className="text-red-700">Not Established</strong>
-              )}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onClearLocal}
-              className="gap-1 text-xs"
-            >
-              <RotateCcw className="h-3 w-3" /> Clear local
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => setShowPreview((s) => !s)}
-              className="gap-1 text-xs"
-              variant={showPreview ? "secondary" : "default"}
-            >
-              {showPreview ? "Hide preview" : "Preview Monday payload"}
-            </Button>
-          </div>
+    <section className="rounded-xl bg-card border shadow-card p-5 space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            Monday Preview
+          </p>
+          <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+            Derived values that would be written to Monday on submit (not synced yet).
+          </p>
         </div>
-
-        {!validity.established && validity.reasons.length > 0 && (
-          <div className="text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">Reasons:</span>{" "}
-            {validity.reasons.join(" · ")}
-          </div>
-        )}
-
-        {showPreview && <MondayPreviewPanel preview={preview} />}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onClearLocal}
+          className="gap-1 text-xs"
+        >
+          <RotateCcw className="h-3 w-3" /> Clear local
+        </Button>
       </div>
-    </div>
+
+      {/* Section pills + MN status */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <SectionPill label="CGM" status={validity.sections.cgm} />
+        <SectionPill label="IP" status={validity.sections.ip} />
+        <SectionPill
+          label="Diagnosis"
+          status={{ shown: true, valid: validity.sections.diagnosis.valid }}
+        />
+        <SectionPill
+          label="MR"
+          status={{ shown: true, valid: validity.sections.mr.valid }}
+        />
+        <span className="text-sm ml-1">
+          →{" "}
+          {validity.established ? (
+            <strong className="text-emerald-700">Medical Necessity: Established</strong>
+          ) : (
+            <strong className="text-red-700">Not Established</strong>
+          )}
+        </span>
+      </div>
+
+      {!validity.established && validity.reasons.length > 0 && (
+        <div className="text-xs text-muted-foreground border-l-2 border-red-200 pl-3 py-1">
+          <span className="font-medium text-foreground">Reasons:</span>{" "}
+          {validity.reasons.join(" · ")}
+        </div>
+      )}
+
+      <div>
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+          Monday Columns
+        </p>
+        <MondayPreviewPanel preview={preview} />
+      </div>
+    </section>
   );
 }
 
 function MondayPreviewPanel({ preview }: { preview: ReturnType<typeof buildMondayPreview> }) {
   return (
-    <div className="mt-1 rounded-md border bg-muted/20 overflow-auto max-h-[50vh]">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-3 pt-2 pb-1">
-        Monday columns (preview — not synced)
-      </p>
+    <div className="rounded-md border bg-muted/20 overflow-hidden">
       <table className="w-full text-xs">
         <tbody className="[&>tr]:border-t [&>tr:first-child]:border-t-0 [&>tr>td]:px-3 [&>tr>td]:py-2 [&>tr>td]:align-top">
           <ColRow label="IP Coverage Path" value={preview.ipCoveragePath} />
