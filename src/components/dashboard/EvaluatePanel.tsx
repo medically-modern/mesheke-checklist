@@ -249,7 +249,14 @@ export function EvaluatePanel({ patient }: Props) {
     setSending(true);
     const tasks: { label: string; run: () => Promise<unknown> }[] = [];
 
-    if (state.ipCoveragePath) {
+    // Insulin Pump Coverage Path — write "Not Serving" if the patient isn't
+    // being served IP at all; otherwise write the rep's selection (or clear).
+    if (!showIp) {
+      tasks.push({
+        label: "IP Coverage Path",
+        run: () => writeStatusLabel(patient.id, COL.ipCoveragePath, "Not Serving"),
+      });
+    } else if (state.ipCoveragePath) {
       tasks.push({
         label: "IP Coverage Path",
         run: () => writeStatusLabel(patient.id, COL.ipCoveragePath, state.ipCoveragePath!),
@@ -260,7 +267,13 @@ export function EvaluatePanel({ patient }: Props) {
         run: () => clearStatusColumn(patient.id, COL.ipCoveragePath),
       });
     }
-    if (state.cgmCoveragePath) {
+    // CGM Coverage Path — same pattern.
+    if (!showCgm) {
+      tasks.push({
+        label: "CGM Coverage Path",
+        run: () => writeStatusLabel(patient.id, COL.cgmCoveragePath, "Not Serving"),
+      });
+    } else if (state.cgmCoveragePath) {
       tasks.push({
         label: "CGM Coverage Path",
         run: () => writeStatusLabel(patient.id, COL.cgmCoveragePath, state.cgmCoveragePath!),
@@ -336,7 +349,7 @@ export function EvaluatePanel({ patient }: Props) {
         description: failures.slice(0, 3).join("\n"),
       });
     }
-  }, [patient.id, state, preview]);
+  }, [patient.id, state, preview, showCgm, showIp]);
 
   return (
     <div className="space-y-4">
