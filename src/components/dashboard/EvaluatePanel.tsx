@@ -742,7 +742,7 @@ interface ValiditySummaryProps {
 }
 
 function ValiditySummary({ validity, preview, onClearLocal }: ValiditySummaryProps) {
-  const [showPreview, setShowPreview] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
 
   return (
     <div className="fixed bottom-0 left-0 right-0 sm:left-[var(--sidebar-width,16rem)] z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -796,14 +796,98 @@ function ValiditySummary({ validity, preview, onClearLocal }: ValiditySummaryPro
           </div>
         )}
 
-        {showPreview && (
-          <pre className="mt-1 p-3 rounded-md border bg-muted/30 text-[11px] leading-relaxed overflow-auto max-h-[40vh]">
-            {JSON.stringify(preview, null, 2)}
-          </pre>
-        )}
+        {showPreview && <MondayPreviewPanel preview={preview} />}
       </div>
     </div>
   );
+}
+
+function MondayPreviewPanel({ preview }: { preview: ReturnType<typeof buildMondayPreview> }) {
+  return (
+    <div className="mt-1 rounded-md border bg-muted/20 overflow-auto max-h-[50vh]">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-3 pt-2 pb-1">
+        Monday columns (preview — not synced)
+      </p>
+      <table className="w-full text-xs">
+        <tbody className="[&>tr]:border-t [&>tr:first-child]:border-t-0 [&>tr>td]:px-3 [&>tr>td]:py-2 [&>tr>td]:align-top">
+          <ColRow label="IP Coverage Path" value={preview.ipCoveragePath} />
+          <ColRow label="CGM Coverage Path" value={preview.cgmCoveragePath} />
+          <ColRow label="Diagnosis" value={preview.diagnosis} />
+          <ColRow label="MRs / Clinicals" value={preview.mrsClinicals} />
+          <ColRow label="Last Visit Date" value={formatPreviewDate(preview.lastVisitDate)} />
+          <ColRow label="MR Expiry Date" value={formatPreviewDate(preview.mrExpiryDate)} />
+          <ColRow
+            label="Medical Necessity"
+            value={preview.medicalNecessity}
+            valueClass={
+              preview.medicalNecessity === "Established"
+                ? "text-emerald-700 font-medium"
+                : "text-red-700 font-medium"
+            }
+          />
+          <ReasonsRow label="CGM MN Invalid Reasons" reasons={preview.cgmMnInvalidReasons} />
+          <ReasonsRow label="IP MN Invalid Reasons" reasons={preview.ipMnInvalidReasons} />
+          {preview.generateCgmScript && (
+            <ColRow label="Generate CGM Script" value={preview.generateCgmScript} />
+          )}
+          {preview.generateIpScript && (
+            <ColRow label="Generate IP Script" value={preview.generateIpScript} />
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ColRow({
+  label,
+  value,
+  valueClass,
+}: {
+  label: string;
+  value?: string;
+  valueClass?: string;
+}) {
+  return (
+    <tr>
+      <td className="text-muted-foreground w-[180px] whitespace-nowrap">{label}</td>
+      <td className={cn("font-medium", valueClass, !value && "text-muted-foreground/60 italic")}>
+        {value || "—"}
+      </td>
+    </tr>
+  );
+}
+
+function ReasonsRow({ label, reasons }: { label: string; reasons: string[] }) {
+  return (
+    <tr>
+      <td className="text-muted-foreground w-[180px] whitespace-nowrap">{label}</td>
+      <td>
+        {reasons.length === 0 ? (
+          <span className="text-muted-foreground/60 italic">—</span>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {reasons.map((r) => (
+              <span
+                key={r}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5"
+              >
+                <X className="h-3 w-3" />
+                {r}
+              </span>
+            ))}
+          </div>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function formatPreviewDate(iso?: string): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function SectionPill({

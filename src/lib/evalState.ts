@@ -100,7 +100,10 @@ export function isOowDateValid(
 
 export interface ValidityResult {
   established: boolean;
-  reasons: string[]; // human-readable list of what's blocking
+  reasons: string[]; // combined human-readable list (all reasons)
+  cgmReasons: string[]; // CGM-block-specific only
+  ipReasons: string[]; // IP-block-specific only
+  generalReasons: string[]; // shared (diagnosis, MR received, last visit, expiry)
   sections: {
     cgm: { shown: boolean; valid: boolean };
     ip: { shown: boolean; valid: boolean };
@@ -125,14 +128,16 @@ export function deriveValidity(
   showCgm: boolean,
   showIp: boolean,
 ): ValidityResult {
-  const reasons: string[] = [];
+  const cgmReasons: string[] = [];
+  const ipReasons: string[] = [];
+  const generalReasons: string[] = [];
 
   // ---- CGM section ----
   let cgmValid = true;
   if (showCgm) {
     if (state.cgmScriptValid !== "Valid") {
       cgmValid = false;
-      reasons.push(
+      cgmReasons.push(
         state.cgmScriptValid === "Invalid"
           ? "CGM Script invalid"
           : "CGM Script not validated",
@@ -140,10 +145,10 @@ export function deriveValidity(
     }
     if (!state.cgmCoveragePath) {
       cgmValid = false;
-      reasons.push("CGM Coverage Path not selected");
+      cgmReasons.push("CGM Coverage Path not selected");
     } else if (state.cgmCoveragePath === "Invalid") {
       cgmValid = false;
-      reasons.push("CGM Coverage Path invalid");
+      cgmReasons.push("CGM Coverage Path invalid");
     }
   }
 
@@ -152,12 +157,12 @@ export function deriveValidity(
   if (showIp) {
     if (!state.ipCoveragePath) {
       ipValid = false;
-      reasons.push("IP Coverage Path not selected");
+      ipReasons.push("IP Coverage Path not selected");
     } else {
       const cfg = IP_PATH_FIELDS[state.ipCoveragePath];
       if (state.ipScriptValid !== "Valid") {
         ipValid = false;
-        reasons.push(
+        ipReasons.push(
           state.ipScriptValid === "Invalid"
             ? "IP Script invalid"
             : "IP Script not validated",
@@ -165,65 +170,68 @@ export function deriveValidity(
       }
       if (cfg.showEducation && state.diabetesEducation !== "Yes") {
         ipValid = false;
-        reasons.push("Diabetes Education not documented");
+        ipReasons.push("Diabetes Education not documented");
       }
       if (cfg.show3Injections && state.threeInjections !== "Yes") {
         ipValid = false;
-        reasons.push("3+ Injections per day not documented");
+        ipReasons.push("3+ Injections per day not documented");
       }
       if (cfg.showCgmUse && state.cgmUse !== "Yes") {
         ipValid = false;
-        reasons.push("CGM Use not documented");
+        ipReasons.push("CGM Use not documented");
       }
       if (cfg.showBsIssues && state.bloodSugarIssues !== "Yes") {
         ipValid = false;
-        reasons.push("Blood Sugar Issues not documented");
+        ipReasons.push("Blood Sugar Issues not documented");
       }
       if (cfg.showLmn) {
         if (state.lmn === "No" || state.lmn === undefined) {
           ipValid = false;
-          reasons.push("Letter of MN not on file");
+          ipReasons.push("Letter of MN not on file");
         } else if (state.lmn === "Yes, but Invalid") {
           ipValid = false;
-          reasons.push("Letter of MN invalid");
+          ipReasons.push("Letter of MN invalid");
         }
       }
       if (cfg.showOow) {
         const oow = isOowDateValid(state.oowDate, patient.primaryInsurance);
         if (!oow) {
           ipValid = false;
-          reasons.push("OOW Date not provided");
+          ipReasons.push("OOW Date not provided");
         } else if (!oow.valid) {
           const yrs = (oow.thresholdDays / 365.25).toFixed(0);
           ipValid = false;
-          reasons.push(`OOW Date too recent (must be > ${yrs} years old)`);
+          ipReasons.push(`OOW Date too recent (must be > ${yrs} years old)`);
         }
       }
       if (cfg.showMalfunction && state.malfunction !== "Yes") {
         ipValid = false;
-        reasons.push("Malfunction not documented");
+        ipReasons.push("Malfunction not documented");
       }
     }
   }
 
   // ---- Diagnosis ----
   const diagnosisValid = !!state.diagnosis && state.diagnosis !== "Evaluate";
-  if (!diagnosisValid) reasons.push("Diagnosis not selected");
+  if (!diagnosisValid) generalReasons.push("Diagnosis not selected");
 
   // ---- MR Received + Last Visit + Expiry ----
   const mrReceived = state.mrReceived === "Yes";
   const lastVisitSet = !!state.lastVisitDate;
   const { expired } = getMrExpiry(state.lastVisitDate);
   const mrValid = mrReceived && lastVisitSet && !expired;
-  if (!mrReceived) reasons.push("MR not received");
-  if (mrReceived && !lastVisitSet) reasons.push("Last Visit Date not set");
-  if (mrReceived && lastVisitSet && expired) reasons.push("MR expired (last visit > 6 months ago)");
+  if (!mrReceived) generalReasons.push("MR not received");
+  if (mrReceived && !lastVisitSet) generalReasons.push("Last Visit Date not set");
+  if (mrReceived && lastVisitSet && expired) generalReasons.push("MR expired (last visit > 6 months ago)");
 
   const established = cgmValid && ipValid && diagnosisValid && mrValid;
 
   return {
     established,
-    reasons,
+    reasons: [...cgmReasons, ...ipReasons, ...generalReasons],
+    cgmReasons,
+    ipReasons,
+    generalReasons,
     sections: {
       cgm: { shown: showCgm, valid: cgmValid },
       ip: { shown: showIp, valid: ipValid },
@@ -240,8 +248,11 @@ export interface MondayPreview {
   cgmCoveragePath?: string;
   diagnosis?: string;
   mrsClinicals: "MR Received" | "Collect";
+  lastVisitDate?: string;
+  mrExpiryDate?: string;
   medicalNecessity: "Established" | "Not Established";
-  reasonsNotEstablished: string[];
+  cgmMnInvalidReasons: string[];
+  ipMnInvalidReasons: string[];
   generateCgmScript?: string;
   generateIpScript?: string;
 }
@@ -250,13 +261,17 @@ export function buildMondayPreview(
   state: EvalState,
   validity: ValidityResult,
 ): MondayPreview {
+  const { expiry } = getMrExpiry(state.lastVisitDate);
   return {
     ipCoveragePath: state.ipCoveragePath,
     cgmCoveragePath: state.cgmCoveragePath,
     diagnosis: state.diagnosis,
     mrsClinicals: state.mrReceived === "Yes" ? "MR Received" : "Collect",
+    lastVisitDate: state.lastVisitDate,
+    mrExpiryDate: expiry ? expiry.toISOString().slice(0, 10) : undefined,
     medicalNecessity: validity.established ? "Established" : "Not Established",
-    reasonsNotEstablished: validity.established ? [] : validity.reasons,
+    cgmMnInvalidReasons: validity.cgmReasons,
+    ipMnInvalidReasons: validity.ipReasons,
     generateCgmScript: state.generateCgmScript,
     generateIpScript: state.generateIpScript,
   };
