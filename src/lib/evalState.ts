@@ -21,10 +21,12 @@ export interface EvalState {
   // CGM block
   cgmScriptValid?: ValidInvalid;
   cgmCoveragePath?: CgmCoveragePath;
+  generateCgmScript?: string; // Ready / Generate / Not Needed
 
   // IP block
   ipCoveragePath?: IpPath;
   ipScriptValid?: ValidInvalid;
+  generateIpScript?: string; // Ready / Generate / Not Needed
   diabetesEducation?: YesNo;
   threeInjections?: YesNo;
   cgmUse?: YesNo;
@@ -103,8 +105,18 @@ export interface ValidityResult {
     cgm: { shown: boolean; valid: boolean };
     ip: { shown: boolean; valid: boolean };
     diagnosis: { valid: boolean };
-    mr: { valid: boolean };
+    mr: { valid: boolean }; // mr received + last visit set + not expired
   };
+}
+
+/** Compute MR Expiry Date (Last Visit + 6 months) and whether it's still valid (after today). */
+export function getMrExpiry(lastVisit?: string): { expiry: Date | null; expired: boolean } {
+  if (!lastVisit) return { expiry: null, expired: false };
+  const d = new Date(lastVisit);
+  if (Number.isNaN(d.getTime())) return { expiry: null, expired: false };
+  const expiry = new Date(d);
+  expiry.setMonth(expiry.getMonth() + 6);
+  return { expiry, expired: expiry.getTime() <= Date.now() };
 }
 
 export function deriveValidity(
@@ -180,7 +192,7 @@ export function deriveValidity(
         const oow = isOowDateValid(state.oowDate, patient.primaryInsurance);
         if (!oow) {
           ipValid = false;
-          reasons.push("OOW Date not entered");
+          reasons.push("OOW Date not provided");
         } else if (!oow.valid) {
           const yrs = (oow.thresholdDays / 365.25).toFixed(0);
           ipValid = false;
@@ -198,9 +210,14 @@ export function deriveValidity(
   const diagnosisValid = !!state.diagnosis && state.diagnosis !== "Evaluate";
   if (!diagnosisValid) reasons.push("Diagnosis not selected");
 
-  // ---- MR Received ----
-  const mrValid = state.mrReceived === "Yes";
-  if (!mrValid) reasons.push("MR not received");
+  // ---- MR Received + Last Visit + Expiry ----
+  const mrReceived = state.mrReceived === "Yes";
+  const lastVisitSet = !!state.lastVisitDate;
+  const { expired } = getMrExpiry(state.lastVisitDate);
+  const mrValid = mrReceived && lastVisitSet && !expired;
+  if (!mrReceived) reasons.push("MR not received");
+  if (mrReceived && !lastVisitSet) reasons.push("Last Visit Date not set");
+  if (mrReceived && lastVisitSet && expired) reasons.push("MR expired (last visit > 6 months ago)");
 
   const established = cgmValid && ipValid && diagnosisValid && mrValid;
 
@@ -225,6 +242,8 @@ export interface MondayPreview {
   mrsClinicals: "MR Received" | "Collect";
   medicalNecessity: "Established" | "Not Established";
   reasonsNotEstablished: string[];
+  generateCgmScript?: string;
+  generateIpScript?: string;
 }
 
 export function buildMondayPreview(
@@ -238,5 +257,7 @@ export function buildMondayPreview(
     mrsClinicals: state.mrReceived === "Yes" ? "MR Received" : "Collect",
     medicalNecessity: validity.established ? "Established" : "Not Established",
     reasonsNotEstablished: validity.established ? [] : validity.reasons,
+    generateCgmScript: state.generateCgmScript,
+    generateIpScript: state.generateIpScript,
   };
 }

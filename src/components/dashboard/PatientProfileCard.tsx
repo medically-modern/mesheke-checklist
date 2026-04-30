@@ -75,8 +75,8 @@ export function PatientProfileCard({ patient }: Props) {
 
       <div className="h-px bg-border" />
 
-      {/* Row 2: Workflow context */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Row 2: Workflow context — left-aligned with row 1 (4-col grid, 3 used) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Field
           icon={<Stethoscope className="h-4 w-4" />}
           label="Referral Type"
@@ -94,11 +94,11 @@ export function PatientProfileCard({ patient }: Props) {
         />
       </div>
 
-      {/* Doctor info — collapsible */}
+      {/* Doctor info — collapsible (Name + Clinicals Method shown when collapsed) */}
       <div className="border-t pt-3">
         <button
           onClick={() => setDoctorOpen((o) => !o)}
-          className="w-full flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+          className="w-full flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors gap-3"
         >
           <span className="flex items-center gap-2">
             {doctorOpen ? (
@@ -109,18 +109,30 @@ export function PatientProfileCard({ patient }: Props) {
             Doctor Info
           </span>
           {!doctorOpen && (
-            <span className="text-[11px] normal-case text-foreground/70">
-              {patient.doctorName ?? "—"}
+            <span className="flex items-center gap-3 text-[11px] normal-case text-foreground/70 truncate">
+              <span className="inline-flex items-center gap-1 truncate">
+                <UserRound className="h-3 w-3 shrink-0" />
+                <span className="truncate">{patient.doctorName ?? "—"}</span>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Send className="h-3 w-3 shrink-0" />
+                <span>{patient.clinicalsMethod ?? "—"}</span>
+              </span>
             </span>
           )}
         </button>
 
         {doctorOpen && (
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Field
               icon={<UserRound className="h-4 w-4" />}
               label="Doctor Name"
               value={patient.doctorName ?? ""}
+            />
+            <Field
+              icon={<Send className="h-4 w-4" />}
+              label="Clinicals Method"
+              value={patient.clinicalsMethod ?? ""}
             />
             <Field
               icon={<Hash className="h-4 w-4" />}
@@ -146,11 +158,6 @@ export function PatientProfileCard({ patient }: Props) {
               icon={<Building2 className="h-4 w-4" />}
               label="Clinic"
               value={patient.clinicName ?? ""}
-            />
-            <Field
-              icon={<Send className="h-4 w-4" />}
-              label="Clinicals Method"
-              value={patient.clinicalsMethod ?? ""}
             />
           </div>
         )}

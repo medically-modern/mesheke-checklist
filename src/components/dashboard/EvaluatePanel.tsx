@@ -6,12 +6,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import {
   VALID_INVALID_OPTS,
   YES_NO_OPTS,
@@ -19,6 +26,7 @@ import {
   LMN_OPTS,
   IP_PATH_OPTS,
   DIAGNOSIS_LIST,
+  GEN_SCRIPT_OPTS,
 } from "@/lib/fieldOptions";
 import {
   IP_PATH_FIELDS,
@@ -32,6 +40,7 @@ import {
   saveEvalState,
   clearEvalState,
   isOowDateValid,
+  getMrExpiry,
   deriveValidity,
   buildMondayPreview,
   type EvalState,
@@ -49,6 +58,8 @@ import {
   FileText,
   Trash2,
   RotateCcw,
+  ChevronsUpDown,
+  AlertTriangle,
 } from "lucide-react";
 
 interface Props {
@@ -119,57 +130,7 @@ export function EvaluatePanel({ patient }: Props) {
         </div>
       )}
 
-      {/* CGM block */}
-      {showCgm && (
-        <SectionCard
-          title="CGM"
-          status={validity.sections.cgm.shown ? validity.sections.cgm.valid : null}
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-            <StatusSelect
-              label="Valid CGM Script"
-              value={state.cgmScriptValid}
-              options={VALID_INVALID_OPTS}
-              onChange={(v) => update("cgmScriptValid", v as ValidInvalid)}
-            />
-            <StatusSelect
-              label="Coverage Path"
-              value={state.cgmCoveragePath}
-              options={CGM_COVERAGE_OPTS}
-              onChange={(v) => update("cgmCoveragePath", v as CgmCoveragePath)}
-            />
-          </div>
-        </SectionCard>
-      )}
-
-      {/* IP block */}
-      {showIp && (
-        <SectionCard
-          title="Insulin Pump"
-          status={validity.sections.ip.shown ? validity.sections.ip.valid : null}
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 mb-2">
-            <StatusSelect
-              label="IP Coverage Path"
-              value={state.ipCoveragePath}
-              options={IP_PATH_OPTS}
-              onChange={(v) => update("ipCoveragePath", v as IpPath)}
-            />
-            <StatusSelect
-              label="Valid IP Script"
-              value={state.ipScriptValid}
-              options={VALID_INVALID_OPTS}
-              onChange={(v) => update("ipScriptValid", v as ValidInvalid)}
-            />
-          </div>
-
-          {state.ipCoveragePath && (
-            <IpCriteria state={state} patient={patient} update={update} />
-          )}
-        </SectionCard>
-      )}
-
-      {/* Diagnosis & Clinicals */}
+      {/* Diagnosis & Clinicals — top section */}
       <SectionCard
         title="Diagnosis & Clinicals"
         status={validity.sections.diagnosis.valid && validity.sections.mr.valid}
@@ -193,14 +154,75 @@ export function EvaluatePanel({ patient }: Props) {
             value={state.lastVisitDate}
             onChange={(v) => update("lastVisitDate", v)}
           />
-          <ReadOnlyField
-            label="MR Expiry Date"
-            value={state.lastVisitDate ? formatDate(plusMonths(state.lastVisitDate, 6)) : "—"}
-            hint={state.lastVisitDate ? "auto: Last Visit + 6 months" : "set Last Visit first"}
-          />
+          <MrExpiryField lastVisit={state.lastVisitDate} />
         </div>
+      </SectionCard>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+      {/* CGM block */}
+      {showCgm && (
+        <SectionCard
+          title="CGM"
+          status={validity.sections.cgm.shown ? validity.sections.cgm.valid : null}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6">
+            <StatusSelect
+              label="Valid CGM Script"
+              value={state.cgmScriptValid}
+              options={VALID_INVALID_OPTS}
+              onChange={(v) => update("cgmScriptValid", v as ValidInvalid)}
+            />
+            <StatusSelect
+              label="Coverage Path"
+              value={state.cgmCoveragePath}
+              options={CGM_COVERAGE_OPTS}
+              onChange={(v) => update("cgmCoveragePath", v as CgmCoveragePath)}
+            />
+            <StatusSelect
+              label="Generate CGM Script"
+              value={state.generateCgmScript}
+              options={GEN_SCRIPT_OPTS}
+              onChange={(v) => update("generateCgmScript", v)}
+            />
+          </div>
+        </SectionCard>
+      )}
+
+      {/* IP block */}
+      {showIp && (
+        <SectionCard
+          title="Insulin Pump"
+          status={validity.sections.ip.shown ? validity.sections.ip.valid : null}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 mb-2">
+            <StatusSelect
+              label="IP Coverage Path"
+              value={state.ipCoveragePath}
+              options={IP_PATH_OPTS}
+              onChange={(v) => update("ipCoveragePath", v as IpPath)}
+            />
+            <StatusSelect
+              label="Valid IP Script"
+              value={state.ipScriptValid}
+              options={VALID_INVALID_OPTS}
+              onChange={(v) => update("ipScriptValid", v as ValidInvalid)}
+            />
+            <StatusSelect
+              label="Generate IP Script"
+              value={state.generateIpScript}
+              options={GEN_SCRIPT_OPTS}
+              onChange={(v) => update("generateIpScript", v)}
+            />
+          </div>
+
+          {state.ipCoveragePath && (
+            <IpCriteria state={state} patient={patient} update={update} />
+          )}
+        </SectionCard>
+      )}
+
+      {/* Clinical files (uploads) */}
+      <SectionCard title="Clinical Files">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <FileUploadCard
             label="Clinical Files"
             files={state.clinicalFiles ?? []}
@@ -361,16 +383,32 @@ function IpCriteria({ state, patient, update }: IpCriteriaProps) {
 
       {cfg.showOow && (
         <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 items-end">
-          <DateField
-            label="OOW Date"
-            value={state.oowDate}
-            onChange={(v) => update("oowDate", v)}
-          />
+          <div className="space-y-1.5 px-2">
+            <Label className="text-xs text-muted-foreground">OOW Date</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                value={state.oowDate ?? ""}
+                onChange={(e) => update("oowDate", e.target.value)}
+                className="text-sm h-9"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => update("oowDate", undefined)}
+                disabled={!state.oowDate}
+                className="h-9 px-2 text-xs gap-1"
+                title="Mark as not provided"
+              >
+                <X className="h-3 w-3" /> Clear
+              </Button>
+            </div>
+          </div>
           <div className="flex items-center gap-2 pb-1">
             {oowCheck === null ? (
-              <span className="text-xs text-muted-foreground">
-                Pump must be {oowYears}+ years out of warranty
-                {isMedicareAB && " (Medicare A&B)"}
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">
+                <X className="h-3 w-3" />
+                Not provided — invalid
               </span>
             ) : oowCheck.valid ? (
               <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
@@ -383,6 +421,9 @@ function IpCriteria({ state, patient, update }: IpCriteriaProps) {
                 {(oowCheck.ageDays / 365.25).toFixed(1)} yrs — needs {oowYears}+ years
               </span>
             )}
+            <span className="text-[10px] text-muted-foreground">
+              ({oowYears}+ yrs required{isMedicareAB && " · Medicare A&B"})
+            </span>
           </div>
         </div>
       )}
@@ -410,14 +451,33 @@ function DateField({ label, value, onChange }: DateFieldProps) {
   );
 }
 
-function ReadOnlyField({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function MrExpiryField({ lastVisit }: { lastVisit?: string }) {
+  const { expiry, expired } = getMrExpiry(lastVisit);
   return (
     <div className="space-y-1.5 px-2">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <div className="text-sm h-9 flex items-center px-3 rounded-md border bg-muted/30 text-foreground">
-        {value}
+      <Label className="text-xs text-muted-foreground">MR Expiry Date</Label>
+      <div
+        className={cn(
+          "text-sm h-9 flex items-center justify-between px-3 rounded-md border",
+          !expiry && "bg-muted/30 text-muted-foreground",
+          expiry && !expired && "bg-emerald-50 border-emerald-200 text-emerald-900",
+          expired && "bg-red-50 border-red-200 text-red-900",
+        )}
+      >
+        <span>{expiry ? formatDate(expiry.toISOString().slice(0, 10)) : "—"}</span>
+        {expiry && expired && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider">
+            <AlertTriangle className="h-3 w-3" /> Expired
+          </span>
+        )}
       </div>
-      {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
+      <p className="text-[10px] text-muted-foreground">
+        {lastVisit
+          ? expired
+            ? "Re-collect MR — last visit was over 6 months ago"
+            : "auto: Last Visit + 6 months"
+          : "set Last Visit first"}
+      </p>
     </div>
   );
 }
@@ -428,21 +488,57 @@ interface DiagnosisFieldProps {
 }
 
 function DiagnosisField({ value, onChange }: DiagnosisFieldProps) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50">
       <span className="text-sm text-muted-foreground whitespace-nowrap">Diagnosis</span>
-      <Select value={value ?? ""} onValueChange={onChange}>
-        <SelectTrigger className="w-[160px] h-8 text-xs font-medium border-violet-200 bg-violet-50 data-[placeholder]:border-muted data-[placeholder]:bg-background">
-          <SelectValue placeholder="—" />
-        </SelectTrigger>
-        <SelectContent className="max-h-[300px]">
-          {DIAGNOSIS_LIST.map((code) => (
-            <SelectItem key={code} value={code} className="text-xs">
-              {code}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className={cn(
+              "w-[160px] h-8 px-3 text-xs font-medium justify-between",
+              value
+                ? "border-violet-200 bg-violet-50 hover:bg-violet-50/80"
+                : "border-muted",
+            )}
+          >
+            {value || "—"}
+            <ChevronsUpDown className="h-3 w-3 opacity-50 shrink-0" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[260px] p-0" align="end">
+          <Command>
+            <CommandInput placeholder="Search ICD-10..." className="h-9" />
+            <CommandList>
+              <CommandEmpty>No code found.</CommandEmpty>
+              <CommandGroup>
+                {DIAGNOSIS_LIST.map((code) => (
+                  <CommandItem
+                    key={code}
+                    value={code}
+                    onSelect={() => {
+                      onChange(code === value ? "" : code);
+                      setOpen(false);
+                    }}
+                    className="text-xs cursor-pointer"
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-3 w-3",
+                        value === code ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    {code}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
