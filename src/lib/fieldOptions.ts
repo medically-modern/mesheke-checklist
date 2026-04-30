@@ -103,3 +103,44 @@ export const MN_ATTEMPTS_OPTS: StatusOption[] = [
 export function labelToIndex(options: StatusOption[], label: string): number | undefined {
   return options.find((o) => o.label === label)?.index;
 }
+
+// =====================================================================
+// New simplified Evaluate-tab options (UI-only — never written to Monday)
+// =====================================================================
+
+export const VALID_INVALID_OPTS: StatusOption[] = [
+  { label: "Valid", index: 0 },
+  { label: "Invalid", index: 1 },
+];
+
+export const YES_NO_OPTS: StatusOption[] = [
+  { label: "Yes", index: 0 },
+  { label: "No", index: 1 },
+];
+
+export const CGM_COVERAGE_OPTS: StatusOption[] = [
+  { label: "Insulin", index: 0 },
+  { label: "Hypo", index: 1 },
+  { label: "Invalid", index: 2 },
+];
+
+export const LMN_OPTS: StatusOption[] = [
+  { label: "Yes & Valid", index: 0 },
+  { label: "Yes, but Invalid", index: 1 },
+  { label: "No", index: 2 },
+];
+
+export const IP_PATH_OPTS: StatusOption[] = [
+  { label: "Supplies Only", index: 0 },
+  { label: "1st Pump > 6M", index: 1 },
+  { label: "1st Pump < 6M", index: 2 },
+  { label: "New Pump (OOW)", index: 3 },
+  { label: "Omnipod Switch", index: 4 },
+  { label: "IW New Insurance", index: 5 },
+];
+
+// Diagnosis dropdown — same ICD list, just sorted alphabetically for the new UI
+export const DIAGNOSIS_LIST: string[] = DIAGNOSIS_OPTS
+  .filter((o) => o.label !== "Evaluate" && o.label !== "Collect")
+  .map((o) => o.label)
+  .sort();

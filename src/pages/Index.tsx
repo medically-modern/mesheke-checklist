@@ -6,13 +6,11 @@ import { SendRequestPanel } from "@/components/dashboard/SendRequestPanel";
 import { ReceiptChasePanel } from "@/components/dashboard/ReceiptChasePanel";
 import { PatientsSidebar } from "@/components/dashboard/PatientsSidebar";
 import { PatientProfileCard } from "@/components/dashboard/PatientProfileCard";
-import { SendToMondayButton } from "@/components/dashboard/SendToMondayButton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { RotateCcw, Stethoscope } from "lucide-react";
+import { RotateCcw, Stethoscope, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { sendPatientToMonday } from "@/lib/mondayWrite";
 
 const TAB_LABELS: Record<TabKey, string> = {
   evaluate: "Evaluate",
@@ -50,18 +48,6 @@ const Index = () => {
     clearOverlay(selected.id);
     toast.success("Cleared local edits — refetching from Monday");
     refetch();
-  };
-
-  const handleSend = async () => {
-    if (!selected) return;
-    try {
-      await sendPatientToMonday(selected, mainTab);
-      toast.success("Sent to Monday");
-      setTimeout(refetch, 1000);
-    } catch (e) {
-      toast.error("Send to Monday failed", { description: e instanceof Error ? e.message : String(e) });
-      throw e;
-    }
   };
 
   return (
@@ -130,26 +116,25 @@ const Index = () => {
                 <>
                   <TabsContent value="evaluate" className="space-y-5 mt-0">
                     <PatientProfileCard patient={selected} />
-                    <EvaluatePanel patient={selected} onUpdate={onUpdate} />
-                    <SendToMondayButton onSend={handleSend} disabled={!selected} />
+                    <EvaluatePanel patient={selected} />
                   </TabsContent>
 
                   <TabsContent value="sendRequest" className="space-y-5 mt-0">
                     <PatientProfileCard patient={selected} />
+                    <DisconnectedBanner />
                     <SendRequestPanel patient={selected} onUpdate={onUpdate} />
-                    <SendToMondayButton onSend={handleSend} disabled={!selected} />
                   </TabsContent>
 
                   <TabsContent value="confirmReceipt" className="space-y-5 mt-0">
                     <PatientProfileCard patient={selected} />
+                    <DisconnectedBanner />
                     <ReceiptChasePanel patient={selected} mode="confirmReceipt" onUpdate={onUpdate} />
-                    <SendToMondayButton onSend={handleSend} disabled={!selected} />
                   </TabsContent>
 
                   <TabsContent value="chase" className="space-y-5 mt-0">
                     <PatientProfileCard patient={selected} />
+                    <DisconnectedBanner />
                     <ReceiptChasePanel patient={selected} mode="chase" onUpdate={onUpdate} />
-                    <SendToMondayButton onSend={handleSend} disabled={!selected} />
                   </TabsContent>
                 </>
               )}
@@ -160,5 +145,16 @@ const Index = () => {
     </SidebarProvider>
   );
 };
+
+function DisconnectedBanner() {
+  return (
+    <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 flex items-center gap-2">
+      <AlertTriangle className="h-4 w-4 shrink-0" />
+      <span>
+        <strong>Monday writes disabled.</strong> This tab is in playground mode while we rebuild — changes here will not sync.
+      </span>
+    </div>
+  );
+}
 
 export default Index;
