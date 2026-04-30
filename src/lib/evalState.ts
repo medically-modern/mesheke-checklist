@@ -152,13 +152,13 @@ export function deriveValidity(
   if (showCgm) {
     if (state.cgmScriptValid !== "Valid") {
       cgmValid = false;
-      if (state.cgmScriptValid === "Invalid") cgmReasons.push("CGM Script invalid");
-      else if (state.cgmScriptValid === "Missing") cgmReasons.push("CGM Script missing");
-      else cgmReasons.push("CGM Script not validated");
+      // "Missing" stays its own bucket; everything else (Invalid + unset) → invalid.
+      if (state.cgmScriptValid === "Missing") cgmReasons.push("CGM Script missing");
+      else cgmReasons.push("CGM Script invalid");
     }
     if (!state.cgmCoveragePath) {
       cgmValid = false;
-      cgmReasons.push("CGM Coverage Path not selected");
+      cgmReasons.push("CGM Coverage Path missing");
     } else if (state.cgmCoveragePath === "Invalid") {
       cgmValid = false;
       cgmReasons.push("CGM Coverage Path invalid");
@@ -170,35 +170,34 @@ export function deriveValidity(
   if (showIp) {
     if (!state.ipCoveragePath) {
       ipValid = false;
-      ipReasons.push("Insulin Pump Coverage Path not selected");
+      ipReasons.push("Insulin Pump Coverage Path missing");
     } else {
       const cfg = IP_PATH_FIELDS[state.ipCoveragePath];
       if (state.ipScriptValid !== "Valid") {
         ipValid = false;
-        if (state.ipScriptValid === "Invalid") ipReasons.push("Insulin Pump Script invalid");
-        else if (state.ipScriptValid === "Missing") ipReasons.push("Insulin Pump Script missing");
-        else ipReasons.push("Insulin Pump Script not validated");
+        if (state.ipScriptValid === "Missing") ipReasons.push("Insulin Pump Script missing");
+        else ipReasons.push("Insulin Pump Script invalid");
       }
       if (cfg.showEducation && state.diabetesEducation !== "Yes") {
         ipValid = false;
-        ipReasons.push("Diabetes Education not documented");
+        ipReasons.push("Diabetes Education invalid");
       }
       if (cfg.show3Injections && state.threeInjections !== "Yes") {
         ipValid = false;
-        ipReasons.push("3+ Injections per day not documented");
+        ipReasons.push("3+ Injections invalid");
       }
       if (cfg.showCgmUse && state.cgmUse !== "Yes") {
         ipValid = false;
-        ipReasons.push("CGM Use not documented");
+        ipReasons.push("CGM Use invalid");
       }
       if (cfg.showBsIssues && state.bloodSugarIssues !== "Yes") {
         ipValid = false;
-        ipReasons.push("Blood Sugar Issues not documented");
+        ipReasons.push("Blood Sugar Issues invalid");
       }
       if (cfg.showLmn) {
         if (state.lmn === "No" || state.lmn === undefined) {
           ipValid = false;
-          ipReasons.push("Letter of MN not on file");
+          ipReasons.push("Letter of MN missing");
         } else if (state.lmn === "Yes, but Invalid") {
           ipValid = false;
           ipReasons.push("Letter of MN invalid");
@@ -208,32 +207,32 @@ export function deriveValidity(
         const oow = isOowDateValid(state.oowDate, patient.primaryInsurance);
         if (!oow) {
           ipValid = false;
-          ipReasons.push("OOW Date not provided");
+          ipReasons.push("OOW Date missing");
         } else if (!oow.valid) {
           const yrs = (oow.thresholdDays / 365.25).toFixed(0);
           ipValid = false;
-          ipReasons.push(`OOW Date too recent (must be > ${yrs} years old)`);
+          ipReasons.push(`OOW Date invalid (<${yrs} years)`);
         }
       }
       if (cfg.showMalfunction && state.malfunction !== "Yes") {
         ipValid = false;
-        ipReasons.push("Malfunction not documented");
+        ipReasons.push("Malfunction missing");
       }
     }
   }
 
   // ---- Diagnosis ----
   const diagnosisValid = !!state.diagnosis && state.diagnosis !== "Evaluate";
-  if (!diagnosisValid) generalReasons.push("Diagnosis not selected");
+  if (!diagnosisValid) generalReasons.push("Diagnosis missing");
 
   // ---- MR Received + Last Visit + Expiry ----
   const mrReceived = state.mrReceived === "Yes";
   const lastVisitSet = !!state.lastVisitDate;
   const { expired } = getMrExpiry(state.lastVisitDate);
   const mrValid = mrReceived && lastVisitSet && !expired;
-  if (!mrReceived) generalReasons.push("MR not received");
-  if (mrReceived && !lastVisitSet) generalReasons.push("Last Visit Date not set");
-  if (mrReceived && lastVisitSet && expired) generalReasons.push("MR expired (last visit > 6 months ago)");
+  if (!mrReceived) generalReasons.push("MR Missing");
+  if (mrReceived && !lastVisitSet) generalReasons.push("Last Visit Date missing");
+  if (mrReceived && lastVisitSet && expired) generalReasons.push("MR Expired (>6 months)");
 
   const established = cgmValid && ipValid && diagnosisValid && mrValid;
 
