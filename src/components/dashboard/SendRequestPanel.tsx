@@ -10,6 +10,7 @@ import { useMondayFiles } from "@/hooks/useMondayFiles";
 import {
   COL,
   clearStatusColumn,
+  deleteFileFromColumn,
   hasToken,
   uploadFileToColumn,
   writeDateTime,
@@ -25,7 +26,6 @@ import {
 } from "@/lib/evalState";
 import {
   generateMnRequestPdf,
-  downloadMnRequestPdf,
   previewMnRequestPdf,
 } from "@/lib/mnRequestPdf";
 import { toast } from "sonner";
@@ -41,6 +41,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 
 interface Props {
@@ -108,6 +109,28 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
   const handleGenerateIp = useCallback(
     (v: string | undefined) => triggerGenerate("generateIpScript", COL.generateIpScript, v),
     [triggerGenerate],
+  );
+
+  // ---- Delete script template (clears the file column on Monday) ----
+  const handleDeleteTemplate = useCallback(
+    async (kind: "cgm" | "ip") => {
+      if (!hasToken()) {
+        toast.error("Monday token not configured");
+        return;
+      }
+      const columnId = kind === "cgm" ? COL.cgmTemplate : COL.ipTemplate;
+      const label = kind === "cgm" ? "CGM" : "Insulin Pump";
+      try {
+        await deleteFileFromColumn(patient.id, columnId);
+        await mondayFiles.refetch();
+        toast.success(`${label} script template deleted`);
+      } catch (e) {
+        toast.error(`Failed to delete ${label} script template`, {
+          description: e instanceof Error ? e.message : String(e),
+        });
+      }
+    },
+    [patient.id, mondayFiles],
   );
 
   // ---- Auto-clear local Generate state when Monday flips column away from Generate ----
@@ -293,6 +316,8 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
             onCancelCgm={() => handleGenerateCgm(undefined)}
             onGenerateIp={() => handleGenerateIp("Generate")}
             onCancelIp={() => handleGenerateIp(undefined)}
+            onDeleteCgm={() => handleDeleteTemplate("cgm")}
+            onDeleteIp={() => handleDeleteTemplate("ip")}
             grouped={isParachute}
           />
 
@@ -608,6 +633,8 @@ interface GenerateScriptsCardProps {
   onCancelCgm: () => void;
   onGenerateIp: () => void;
   onCancelIp: () => void;
+  onDeleteCgm: () => void | Promise<void>;
+  onDeleteIp: () => void | Promise<void>;
   /** When true, render with a left accent line marking it as part of
    *  the Parachute drop-down group. */
   grouped?: boolean;
@@ -639,7 +666,12 @@ function GenerateScriptsCard(props: GenerateScriptsCardProps) {
               onGenerate={props.onGenerateCgm}
               onCancel={props.onCancelCgm}
             />
-            <ScriptViewer label="CGM script template" files={props.cgmFiles} loading={props.loading} />
+            <ScriptViewer
+              label="CGM script template"
+              files={props.cgmFiles}
+              loading={props.loading}
+              onDelete={props.onDeleteCgm}
+            />
           </div>
         )}
         {props.showIp && (
@@ -651,7 +683,12 @@ function GenerateScriptsCard(props: GenerateScriptsCardProps) {
               onGenerate={props.onGenerateIp}
               onCancel={props.onCancelIp}
             />
-            <ScriptViewer label="Insulin Pump script template" files={props.ipFiles} loading={props.loading} />
+            <ScriptViewer
+              label="Insulin Pump script template"
+              files={props.ipFiles}
+              loading={props.loading}
+              onDelete={props.onDeleteIp}
+            />
           </div>
         )}
       </div>
@@ -721,11 +758,29 @@ function ScriptViewer({
   label,
   files,
   loading,
+  onDelete,
 }: {
   label: string;
   files: MondayFileEntry[];
   loading: boolean;
+  /** Clear all files in the underlying Monday column. */
+  onDelete?: () => void | Promise<void>;
 }) {
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    if (!window.confirm(`Delete ${label} from Monday? This can't be undone.`)) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await onDelete();
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading && files.length === 0) {
     return (
       <div className="flex items-center justify-between gap-2 px-3 h-9 rounded-md border border-dashed bg-muted/20 text-xs text-muted-foreground">
@@ -759,18 +814,36 @@ function ScriptViewer({
             <FileText className="h-3 w-3 shrink-0" />
             <span className="truncate font-medium">{f.name}</span>
           </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!f.public_url && !f.url}
-            onClick={() => {
-              const u = f.public_url || f.url;
-              if (u) window.open(u, "_blank");
-            }}
-            className="h-7 px-2 text-[11px] gap-1"
-          >
-            <ExternalLink className="h-3 w-3" /> View
-          </Button>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!f.public_url && !f.url}
+              onClick={() => {
+                const u = f.public_url || f.url;
+                if (u) window.open(u, "_blank");
+              }}
+              className="h-7 px-2 text-[11px] gap-1"
+            >
+              <ExternalLink className="h-3 w-3" /> View
+            </Button>
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDelete}
+                disabled={deleting}
+                title="Delete from Monday"
+                className="h-7 px-2 text-[11px] text-red-600 hover:bg-red-50 hover:text-red-700"
+              >
+                {deleting ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3 w-3" />
+                )}
+              </Button>
+            )}
+          </div>
         </div>
       ))}
     </div>
@@ -784,20 +857,19 @@ function RequestLetterCard({
   patient: Patient;
   grouped?: boolean;
 }) {
-  const [busy, setBusy] = useState<"preview" | "download" | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const generateAnd = async (mode: "preview" | "download") => {
-    setBusy(mode);
+  const openPreview = async () => {
+    setBusy(true);
     try {
       const bytes = await generateMnRequestPdf(patient);
-      if (mode === "preview") previewMnRequestPdf(bytes);
-      else downloadMnRequestPdf(patient, bytes);
+      previewMnRequestPdf(bytes);
     } catch (e) {
-      toast.error("PDF generation failed", {
+      toast.error("PDF preview failed", {
         description: e instanceof Error ? e.message : String(e),
       });
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   };
 
@@ -817,35 +889,20 @@ function RequestLetterCard({
             are filled in automatically.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => generateAnd("preview")}
-            disabled={busy !== null}
-            className="h-8 gap-1 text-xs"
-          >
-            {busy === "preview" ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <ExternalLink className="h-3 w-3" />
-            )}
-            Preview
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => generateAnd("download")}
-            disabled={busy !== null}
-            className="h-8 gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-          >
-            {busy === "download" ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Download className="h-3 w-3" />
-            )}
-            Generate &amp; Download
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={openPreview}
+          disabled={busy}
+          className="h-8 gap-1 text-xs"
+        >
+          {busy ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <ExternalLink className="h-3 w-3" />
+          )}
+          Preview
+        </Button>
       </div>
     </section>
   );
