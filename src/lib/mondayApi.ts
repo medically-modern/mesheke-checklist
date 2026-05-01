@@ -102,7 +102,7 @@ export const READ_COLUMN_IDS: string[] = [
   COL.pumpType, COL.cgmType, COL.requestType,
   COL.ipCoveragePath, COL.cgmCoveragePath,
   COL.doctorName, COL.doctorNpi, COL.clinicalsMethod,
-  COL.doctorFax, COL.clinicName,
+  COL.doctorPhone, COL.doctorEmail, COL.doctorFax, COL.clinicName,
   COL.masterStage, COL.subStage,
   COL.daysSinceIntake, COL.daysSinceStageStart,
   COL.dateOfIntake, COL.dateOfStageStart,

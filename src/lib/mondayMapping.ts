@@ -66,6 +66,8 @@ export function mondayItemToPatient(item: MondayItem): Patient {
     doctorName: col(item, "text_mm1x46et") || undefined,
     doctorNpi: col(item, "text_mm1x7d91") || undefined,
     clinicalsMethod: col(item, "color_mm1xw7y5") || undefined,
+    doctorPhone: col(item, "phone_mm1xz8c0") || undefined,
+    doctorEmail: col(item, "email_mm1x6fq5") || undefined,
     doctorFax: col(item, "email_mm1xdzcj") || undefined,
     clinicName: col(item, "dropdown_mm1xbvas") || undefined,
     masterStage: col(item, "color_mm1ws96t") || undefined,

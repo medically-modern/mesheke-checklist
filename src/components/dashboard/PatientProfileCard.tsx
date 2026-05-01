@@ -73,38 +73,75 @@ export function PatientProfileCard({ patient, defaultDoctorOpen = false }: Props
 
       <div className="h-px bg-border" />
 
-      {/* Row 2: Workflow context */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Field
-          icon={<Stethoscope className="h-4 w-4" />}
-          label="Referral Type"
-          value={patient.referralType ?? ""}
-        />
-        <Field
-          icon={<Send className="h-4 w-4" />}
-          label="Request Type"
-          value={patient.requestType ?? ""}
-        />
-        <Field
-          icon={<Stethoscope className="h-4 w-4" />}
-          label="Serving"
-          value={patient.serving ?? ""}
-        />
-      </div>
+      {/* Workflow context + equipment.
+         CGM Type shows only when serving CGM. Pump Type shows when serving
+         Insulin Pump or Supplies Only. If there's only one type to show, the
+         result is 4 fields and fits in one row; if both, we render a second
+         row (3 + 2 layout). */}
+      {(() => {
+        const showCgmType =
+          patient.serving === "CGM" ||
+          patient.serving === "Insulin Pump + CGM" ||
+          patient.serving === "Supplies + CGM";
+        const showPumpType =
+          patient.serving === "Insulin Pump" ||
+          patient.serving === "Insulin Pump + CGM" ||
+          patient.serving === "Supplies Only" ||
+          patient.serving === "Supplies + CGM";
+        const both = showCgmType && showPumpType;
 
-      {/* Row 3: Equipment — needed for prescription script generation */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Field
-          icon={<Stethoscope className="h-4 w-4" />}
-          label="CGM Type"
-          value={patient.cgmType ?? ""}
-        />
-        <Field
-          icon={<Stethoscope className="h-4 w-4" />}
-          label="Pump Type"
-          value={patient.pumpType ?? ""}
-        />
-      </div>
+        return (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Field
+                icon={<Stethoscope className="h-4 w-4" />}
+                label="Referral Type"
+                value={patient.referralType ?? ""}
+              />
+              <Field
+                icon={<Send className="h-4 w-4" />}
+                label="Request Type"
+                value={patient.requestType ?? ""}
+              />
+              <Field
+                icon={<Stethoscope className="h-4 w-4" />}
+                label="Serving"
+                value={patient.serving ?? ""}
+              />
+              {/* If only ONE type to show, slot it into the 4th column to keep one row */}
+              {!both && showCgmType && (
+                <Field
+                  icon={<Stethoscope className="h-4 w-4" />}
+                  label="CGM Type"
+                  value={patient.cgmType ?? ""}
+                />
+              )}
+              {!both && showPumpType && (
+                <Field
+                  icon={<Stethoscope className="h-4 w-4" />}
+                  label="Pump Type"
+                  value={patient.pumpType ?? ""}
+                />
+              )}
+            </div>
+            {/* If BOTH types apply, second row holds them */}
+            {both && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Field
+                  icon={<Stethoscope className="h-4 w-4" />}
+                  label="CGM Type"
+                  value={patient.cgmType ?? ""}
+                />
+                <Field
+                  icon={<Stethoscope className="h-4 w-4" />}
+                  label="Pump Type"
+                  value={patient.pumpType ?? ""}
+                />
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* Doctor info — collapsible (Name + Clinicals Method shown when collapsed) */}
       <div className="border-t pt-3">
