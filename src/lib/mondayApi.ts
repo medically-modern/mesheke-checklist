@@ -86,7 +86,11 @@ export const COL = {
   // Confirm Receipt / Chase
   confirmChaseNotes: "text_mm1wssm8",
   confirmReceiptNotes: "text_mm1wbe5y",
-  unsuccessfulAttempts: "dropdown_mm2ywr7j",
+  // Per-attempt columns — each holds "Name — M/D/YY" for one
+  // unsuccessful confirm-receipt attempt.
+  confirmAttempt1: "text_mm2yd068",
+  confirmAttempt2: "text_mm2y9h4a",
+  confirmAttempt3: "text_mm2ymtsk",
   receiptConfirmedDate: "date_mm1wxpdk",
   receiptConfirmedName: "text_mm1wj9at",
   chaseRecipientName: "text_mm1wabj9",
@@ -128,7 +132,7 @@ export const READ_COLUMN_IDS: string[] = [
   COL.generateCgmScript, COL.generateIpScript,
   // Receipt / Chase
   COL.confirmChaseNotes, COL.confirmReceiptNotes,
-  COL.unsuccessfulAttempts,
+  COL.confirmAttempt1, COL.confirmAttempt2, COL.confirmAttempt3,
   COL.receiptConfirmedName, COL.receiptConfirmedDate, COL.chaseRecipientName,
   COL.mnAttempts, COL.nextActionDate,
   COL.escalation,

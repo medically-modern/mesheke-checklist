@@ -75,9 +75,11 @@ export interface Patient {
   // Confirm Receipt / Chase
   confirmChaseNotes?: string;
   confirmReceiptNotes?: string;
-  /** Unsuccessful Confirm Attempts dropdown — comma-separated chip labels
-   *  like "Attempt 1: Donna — 5/1/26, Attempt 2: Lisa — 5/4/26". */
-  unsuccessfulAttempts?: string;
+  /** Per-attempt confirm-receipt records. Each holds "Name — M/D/YY"
+   *  for that attempt; written by the Confirm Receipt panel. */
+  confirmAttempt1?: string;
+  confirmAttempt2?: string;
+  confirmAttempt3?: string;
   receiptConfirmedDate?: string;
   receiptConfirmedName?: string;
   chaseRecipientName?: string;

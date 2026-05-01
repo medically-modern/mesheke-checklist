@@ -8,7 +8,6 @@ import {
   COL,
   hasToken,
   writeDate,
-  writeDropdownLabels,
   writeStatusIndex,
   writeText,
   type MondayFileEntry,
@@ -76,12 +75,15 @@ export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
 
   const isEscalated = currentAttempt === null;
 
-  // Parse history from the Unsuccessful Confirm Attempts dropdown text
-  // (Monday returns it as comma-separated label list).
-  const history = useMemo(
-    () => parseAttemptChips(patient.unsuccessfulAttempts),
-    [patient.unsuccessfulAttempts],
-  );
+  // Build history from the 3 per-attempt text columns. Only attempts
+  // that have been saved (column has a value) appear here.
+  const history = useMemo<AttemptChip[]>(() => {
+    const out: AttemptChip[] = [];
+    if (patient.confirmAttempt1) out.push(parseAttemptValue(1, patient.confirmAttempt1));
+    if (patient.confirmAttempt2) out.push(parseAttemptValue(2, patient.confirmAttempt2));
+    if (patient.confirmAttempt3) out.push(parseAttemptValue(3, patient.confirmAttempt3));
+    return out;
+  }, [patient.confirmAttempt1, patient.confirmAttempt2, patient.confirmAttempt3]);
 
   const canSave = !!name.trim() && !!confirmed && !saving && !isEscalated;
 
@@ -103,18 +105,20 @@ export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
         });
       } else {
         const attempt = currentAttempt ?? 1;
-        const newChip = formatAttemptChip(attempt, name.trim(), new Date());
-        const allChips = [...history.map((h) => h.raw), newChip];
+        const value = formatAttemptValue(name.trim(), new Date());
         const nextSlot = nextMnAttempt(attempt);
         await saveNo({
           patient,
-          allChips,
+          attempt,
+          value,
           nextSlot,
           nextActionDateInput: nextAction,
         });
         // Optimistic local update so the chip + next slot show before refetch
+        const fieldKey =
+          attempt === 1 ? "confirmAttempt1" : attempt === 2 ? "confirmAttempt2" : "confirmAttempt3";
         onUpdate({
-          unsuccessfulAttempts: allChips.join(", "),
+          [fieldKey]: value,
           mnAttempts: nextSlot,
           nextActionDate: nextAction,
           escalation: nextSlot === "Escalate" ? "Escalation Required" : patient.escalation,
@@ -198,17 +202,25 @@ async function saveYes(patient: Patient, name: string) {
 
 async function saveNo({
   patient,
-  allChips,
+  attempt,
+  value,
   nextSlot,
   nextActionDateInput,
 }: {
   patient: Patient;
-  allChips: string[];
+  attempt: number;
+  value: string;
   nextSlot: "Attempt 2" | "Attempt 3" | "Escalate";
   nextActionDateInput: string;
 }) {
-  // 1) Append the new attempt chip to the dropdown.
-  await writeDropdownLabels(patient.id, COL.unsuccessfulAttempts, allChips);
+  // 1) Write the attempt's "Name — date" string into the matching column.
+  const columnId =
+    attempt === 1
+      ? COL.confirmAttempt1
+      : attempt === 2
+        ? COL.confirmAttempt2
+        : COL.confirmAttempt3;
+  await writeText(patient.id, columnId, value);
   // 2) Bump MN Attempts.
   const mnIdx =
     nextSlot === "Attempt 2"
@@ -628,23 +640,17 @@ interface AttemptChip {
   raw: string;
 }
 
-const CHIP_REGEX = /^Attempt\s+(\d+):\s+(.+?)\s+—\s+(.+)$/;
+// Format used for the per-attempt text columns: "Donna — 5/1/26".
+const VALUE_REGEX = /^(.+?)\s+—\s+(.+)$/;
 
-function parseAttemptChips(text?: string): AttemptChip[] {
-  if (!text) return [];
-  return text
-    .split(/,\s*/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((raw) => {
-      const m = raw.match(CHIP_REGEX);
-      if (!m) return { attempt: 0, name: raw, date: "", raw };
-      return { attempt: Number(m[1]), name: m[2], date: m[3], raw };
-    });
+function parseAttemptValue(attempt: number, raw: string): AttemptChip {
+  const m = raw.match(VALUE_REGEX);
+  if (!m) return { attempt, name: raw, date: "", raw };
+  return { attempt, name: m[1], date: m[2], raw };
 }
 
-function formatAttemptChip(attempt: number, name: string, date: Date): string {
-  return `Attempt ${attempt}: ${name} — ${formatDateShort(date)}`;
+function formatAttemptValue(name: string, date: Date): string {
+  return `${name} — ${formatDateShort(date)}`;
 }
 
 function nextMnAttempt(currentAttempt: number): "Attempt 2" | "Attempt 3" | "Escalate" {
