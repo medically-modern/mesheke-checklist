@@ -204,17 +204,17 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
         loading={mondayFiles.loading}
       />
 
-      <CollapsibleHeader
-        title="Generate Scripts & MN Request Letter"
-        open={showAdvanced}
-        onToggle={() => setShowAdvanced((o) => !o)}
-        hint={
-          isParachute
-            ? "Hidden by default for Parachute — submit through the portal"
-            : undefined
-        }
-      />
-      {showAdvanced && (
+      {/* Parachute: collapsed by default, chevron to expand.
+         Fax / Email: always visible, no collapsible. */}
+      {isParachute && (
+        <CollapsibleHeader
+          title="Generate Scripts & MN Request Letter"
+          open={showAdvanced}
+          onToggle={() => setShowAdvanced((o) => !o)}
+          hint="Submitted through the Parachute portal"
+        />
+      )}
+      {(!isParachute || showAdvanced) && (
         <>
           <GenerateScriptsCard
             showCgm={showCgmGenerate}
