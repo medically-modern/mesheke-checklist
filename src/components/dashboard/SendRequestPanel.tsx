@@ -197,6 +197,11 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
 
       <WhatsNeededCard patient={patient} />
 
+      <ClinicalFilesCard
+        files={mondayFiles.clinicalFiles}
+        loading={mondayFiles.loading}
+      />
+
       {isParachute && !showAdvanced ? (
         <ParachuteCollapsedNotice onShow={() => setShowAdvanced(true)} />
       ) : (
@@ -275,6 +280,74 @@ function MethodBanner({ patient }: { patient: Patient }) {
         <p className="text-lg font-semibold leading-tight">{method}</p>
       </div>
       <span className="text-xs opacity-80 ml-auto truncate">{c.hint}</span>
+    </section>
+  );
+}
+
+function ClinicalFilesCard({
+  files,
+  loading,
+}: {
+  files: MondayFileEntry[];
+  loading: boolean;
+}) {
+  const downloadAll = () => {
+    for (const f of files) {
+      const url = f.public_url || f.url;
+      if (url) window.open(url, "_blank");
+    }
+  };
+
+  return (
+    <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            Clinical Files
+          </p>
+          <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+            Files attached on Monday — download to send alongside the request.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={downloadAll}
+          disabled={files.length === 0 || loading}
+          className="h-8 px-2 text-xs gap-1"
+          title={
+            files.length === 0
+              ? "No Monday files to download"
+              : `Download all ${files.length} file(s) from Monday`
+          }
+        >
+          {loading ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Download className="h-3 w-3" />
+          )}
+          Download all
+          {files.length > 0 && ` (${files.length})`}
+        </Button>
+      </div>
+
+      {files.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic">
+          No clinical files attached on Monday.
+        </p>
+      ) : (
+        <ul className="space-y-1">
+          {files.map((f) => (
+            <li
+              key={f.assetId}
+              className="flex items-center gap-2 text-xs bg-emerald-50 border border-emerald-200 rounded px-2 py-1 text-emerald-900"
+            >
+              <FileText className="h-3 w-3 shrink-0" />
+              <span className="truncate font-medium">{f.name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
