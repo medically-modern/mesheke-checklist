@@ -861,54 +861,70 @@ function SendActionCard({
   const isParachute = method === "Parachute";
   const isFaxOrEmail = method === "Fax" || method === "Email";
 
-  return (
-    <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
-      <div>
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">
-          Send Request
-        </p>
-        {!isParachute && (
-          <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-            Once you&apos;ve faxed / submitted the request, click below to advance the stage.
-          </p>
-        )}
-      </div>
+  const recipient =
+    method === "Fax" && patient.doctorFax
+      ? patient.doctorFax
+      : method === "Email" && patient.doctorEmail
+        ? patient.doctorEmail
+        : null;
 
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <span className="text-xs text-muted-foreground">
-          {method === "Fax" && (patient.doctorFax ? `→ ${patient.doctorFax}` : "(no doctor fax on file)")}
-          {method === "Email" && (patient.doctorEmail ? `→ ${patient.doctorEmail}` : "(no doctor email on file)")}
-        </span>
-        {alreadySent && (
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-300 rounded-full px-3 py-1">
+  return (
+    <section className="rounded-xl bg-card border shadow-card overflow-hidden">
+      {/* Header — title + sent status grouped together */}
+      <div className="flex items-start justify-between gap-3 flex-wrap px-5 py-4 border-b bg-muted/30">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold">Send Request</h3>
+          {sentDate ? (
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Last sent <span className="font-medium text-foreground">{sentDate}</span>
+              {sentDays !== null && sentDays >= 0 && (
+                <span className="text-muted-foreground/70">
+                  {" · "}
+                  {sentDays === 0 ? "today" : `${sentDays} day${sentDays === 1 ? "" : "s"} ago`}
+                </span>
+              )}
+            </p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Two-step flow — send the request, then advance the stage.
+            </p>
+          )}
+        </div>
+        {alreadySent ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-300 rounded-full px-3 py-1 shrink-0">
             <Check className="h-3.5 w-3.5" />
-            Sent
+            Request Sent
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-background border rounded-full px-3 py-1 shrink-0">
+            Not sent yet
           </span>
         )}
       </div>
 
-      {sentDate && (
-        <div className="text-xs text-muted-foreground">
-          Last sent: <span className="font-medium text-foreground">{sentDate}</span>
-          {sentDays !== null && sentDays >= 0 && (
-            <span> · {sentDays === 0 ? "today" : `${sentDays} day${sentDays === 1 ? "" : "s"} ago`}</span>
-          )}
-        </div>
-      )}
-
-      {/* Two-step action ladder. Vertical stack so it reads top→bottom and
-          doesn't imply "do one OR the other". */}
-      <div className="space-y-3 pt-2">
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
-            Step 1 — Send the request
-          </p>
+      {/* Two numbered step subsections — same visual pattern as the
+         Insurance Panel Step 1/2/3 layout, so the eye reads top→bottom. */}
+      <div className="p-5 space-y-3">
+        <StepBlock
+          number={1}
+          title="Send the request"
+          subtitle={
+            isParachute
+              ? "Open the Parachute portal in a new tab and submit the request there."
+              : recipient
+                ? `Dispatches the MN Request PDF to ${recipient} via Supermail.`
+                : method === "Fax"
+                  ? "(no doctor fax on file)"
+                  : method === "Email"
+                    ? "(no doctor email on file)"
+                    : ""
+          }
+        >
           {isFaxOrEmail ? (
             <Button
-              variant="outline"
               onClick={onSend}
               disabled={sending}
-              className="gap-2 w-full sm:w-auto"
+              className="gap-2 bg-slate-900 hover:bg-slate-800 text-white"
             >
               {sending ? (
                 <>
@@ -927,18 +943,19 @@ function SendActionCard({
               href={PARACHUTE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-md border border-input bg-background hover:bg-muted/50 text-sm font-medium"
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium transition-colors"
             >
               <ExternalLink className="h-4 w-4" />
               Open Parachute Portal
             </a>
           ) : null}
-        </div>
+        </StepBlock>
 
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
-            Step 2 — Advance the stage
-          </p>
+        <StepBlock
+          number={2}
+          title="Advance the stage"
+          subtitle="Click after the request has been sent — moves the patient to the next stage on Monday."
+        >
           <Button
             size="lg"
             onClick={onMarkComplete}
@@ -957,12 +974,38 @@ function SendActionCard({
               </>
             )}
           </Button>
-          <p className="text-[11px] text-muted-foreground mt-1.5">
-            after request has been sent
-          </p>
-        </div>
+        </StepBlock>
       </div>
     </section>
+  );
+}
+
+function StepBlock({
+  number,
+  title,
+  subtitle,
+  children,
+}: {
+  number: number;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border bg-background/60 p-4">
+      <div className="flex items-start gap-3">
+        <div className="h-7 w-7 rounded-full border-2 border-border bg-background flex items-center justify-center text-xs font-bold shrink-0">
+          {number}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold leading-tight">{title}</p>
+          {subtitle && (
+            <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>
+          )}
+          <div className="mt-3">{children}</div>
+        </div>
+      </div>
+    </div>
   );
 }
 
