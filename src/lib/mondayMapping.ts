@@ -9,6 +9,7 @@ export const SUB_STAGE_INDEX = {
   sendRequest: 9,     // 2B. Send Request
   confirmReceipt: 10, // 2C. Confirm Receipt
   chase: 11,          // 2D. Chase Clinicals
+  completed: 14,      // Final stage — clinicals received
 } as const;
 
 // ---- Advancer indices ----
@@ -109,6 +110,9 @@ export function mondayItemToPatient(item: MondayItem): Patient {
     confirmAttempt1: col(item, "text_mm2yd068") || undefined,
     confirmAttempt2: col(item, "text_mm2y9h4a") || undefined,
     confirmAttempt3: col(item, "text_mm2ymtsk") || undefined,
+    chaseAttempt1: col(item, "text_mm2yhpjt") || undefined,
+    chaseAttempt2: col(item, "text_mm2yb3rv") || undefined,
+    chaseAttempt3: col(item, "text_mm2ybk06") || undefined,
     receiptConfirmedName: col(item, "text_mm1wj9at") || undefined,
     receiptConfirmedDate: col(item, "date_mm1wxpdk") || undefined,
     chaseRecipientName: col(item, "text_mm1wabj9") || undefined,

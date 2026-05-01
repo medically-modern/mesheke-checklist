@@ -93,6 +93,11 @@ export const COL = {
   confirmAttempt3: "text_mm2ymtsk",
   receiptConfirmedDate: "date_mm1wxpdk",
   receiptConfirmedName: "text_mm1wj9at",
+  // Per-attempt columns for the Chase Clinicals stage — same shape as
+  // the confirm-receipt attempts.
+  chaseAttempt1: "text_mm2yhpjt",
+  chaseAttempt2: "text_mm2yb3rv",
+  chaseAttempt3: "text_mm2ybk06",
   chaseRecipientName: "text_mm1wabj9",
   mnAttempts: "color_mm1wz0vg",
   nextActionDate: "date_mm1wadgs",
@@ -133,6 +138,7 @@ export const READ_COLUMN_IDS: string[] = [
   // Receipt / Chase
   COL.confirmChaseNotes, COL.confirmReceiptNotes,
   COL.confirmAttempt1, COL.confirmAttempt2, COL.confirmAttempt3,
+  COL.chaseAttempt1, COL.chaseAttempt2, COL.chaseAttempt3,
   COL.receiptConfirmedName, COL.receiptConfirmedDate, COL.chaseRecipientName,
   COL.mnAttempts, COL.nextActionDate,
   COL.escalation,

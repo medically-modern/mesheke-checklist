@@ -82,6 +82,11 @@ export interface Patient {
   confirmAttempt3?: string;
   receiptConfirmedDate?: string;
   receiptConfirmedName?: string;
+  /** Per-attempt chase-clinicals records — same format as the confirm
+   *  attempts; written by the Chase Clinicals panel. */
+  chaseAttempt1?: string;
+  chaseAttempt2?: string;
+  chaseAttempt3?: string;
   chaseRecipientName?: string;
   mnAttempts?: string;
   nextActionDate?: string;

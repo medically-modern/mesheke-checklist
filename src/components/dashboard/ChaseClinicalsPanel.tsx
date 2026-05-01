@@ -38,53 +38,49 @@ interface Props {
 }
 
 // =====================================================================
-// Main panel
+// Main panel — mirrors ConfirmReceiptPanel for the Chase Clinicals stage.
+// On Yes, advances Stage Advancer to "Completed". On No, logs the
+// attempt to the matching chaseAttempt{N} text column, bumps MN Attempts,
+// and (after the 3rd No) flips the Escalation column.
 // =====================================================================
 
-export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
+export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
   const mondayFiles = useMondayFiles(patient.id);
   const [saving, setSaving] = useState(false);
 
-  // Active-attempt form state — name + yes/no + (if no) next action date
   const [name, setName] = useState("");
   const [confirmed, setConfirmed] = useState<"yes" | "no" | null>(null);
   const [nextAction, setNextAction] = useState<string>("");
 
-  // Reset form when patient changes
   useEffect(() => {
     setName("");
     setConfirmed(null);
     setNextAction("");
   }, [patient.id]);
 
-  // Default next action to today + 2 weekdays whenever the user picks "No"
   useEffect(() => {
     if (confirmed === "no" && !nextAction) {
       setNextAction(formatDateInput(addBusinessDays(new Date(), 2)));
     }
   }, [confirmed, nextAction]);
 
-  // Determine current attempt slot (1, 2, or 3) from MN Attempts column.
-  // No value yet → Attempt 1.
   const currentAttempt = useMemo(() => {
     const v = (patient.mnAttempts || "").trim();
     if (v === "Attempt 2") return 2;
     if (v === "Attempt 3") return 3;
-    if (v === "Escalate") return null; // already escalated, no more attempts
+    if (v === "Escalate") return null;
     return 1;
   }, [patient.mnAttempts]);
 
   const isEscalated = currentAttempt === null;
 
-  // Build history from the 3 per-attempt text columns. Only attempts
-  // that have been saved (column has a value) appear here.
   const history = useMemo<AttemptChip[]>(() => {
     const out: AttemptChip[] = [];
-    if (patient.confirmAttempt1) out.push(parseAttemptValue(1, patient.confirmAttempt1));
-    if (patient.confirmAttempt2) out.push(parseAttemptValue(2, patient.confirmAttempt2));
-    if (patient.confirmAttempt3) out.push(parseAttemptValue(3, patient.confirmAttempt3));
+    if (patient.chaseAttempt1) out.push(parseAttemptValue(1, patient.chaseAttempt1));
+    if (patient.chaseAttempt2) out.push(parseAttemptValue(2, patient.chaseAttempt2));
+    if (patient.chaseAttempt3) out.push(parseAttemptValue(3, patient.chaseAttempt3));
     return out;
-  }, [patient.confirmAttempt1, patient.confirmAttempt2, patient.confirmAttempt3]);
+  }, [patient.chaseAttempt1, patient.chaseAttempt2, patient.chaseAttempt3]);
 
   const canSave = !!name.trim() && !!confirmed && !saving && !isEscalated;
 
@@ -98,11 +94,10 @@ export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
     try {
       if (confirmed === "yes") {
         await saveYes(patient, name.trim());
-        toast.success("Receipt confirmed — moved to Chase Clinicals");
+        toast.success("Clinicals confirmed — moved to Completed");
         onUpdate({
-          receiptConfirmedName: name.trim(),
-          receiptConfirmedDate: formatDateInput(new Date()),
-          subStage: "Chase Clinicals",
+          chaseRecipientName: name.trim(),
+          subStage: "Completed",
         });
       } else {
         const attempt = currentAttempt ?? 1;
@@ -115,9 +110,8 @@ export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
           nextSlot,
           nextActionDateInput: nextAction,
         });
-        // Optimistic local update so the chip + next slot show before refetch
         const fieldKey =
-          attempt === 1 ? "confirmAttempt1" : attempt === 2 ? "confirmAttempt2" : "confirmAttempt3";
+          attempt === 1 ? "chaseAttempt1" : attempt === 2 ? "chaseAttempt2" : "chaseAttempt3";
         onUpdate({
           [fieldKey]: value,
           mnAttempts: nextSlot,
@@ -130,7 +124,6 @@ export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
             : `Attempt ${attempt} saved`,
         );
       }
-      // Reset form for next attempt (or clear if patient is leaving the tab)
       setName("");
       setConfirmed(null);
       setNextAction("");
@@ -147,7 +140,7 @@ export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
     <div className="space-y-4">
       <MethodBanner patient={patient} />
       <DoctorContactCard patient={patient} />
-      <RequestSentBanner patient={patient} />
+      <ReceiptConfirmedBanner patient={patient} />
       <FilesPanel files={mondayFiles} />
       {history.length > 0 && <HistoryCard history={history} />}
       {isEscalated ? (
@@ -167,8 +160,6 @@ export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
       <NotesCard
         value={patient.confirmChaseNotes ?? ""}
         onChange={(v) => onUpdate({ confirmChaseNotes: v })}
-        // Push the latest local value to Monday on blur so we don't fire
-        // a write per keystroke.
         onBlur={() => {
           if (patient.confirmChaseNotes !== undefined && hasToken()) {
             void writeLongText(patient.id, COL.confirmChaseNotes, patient.confirmChaseNotes ?? "");
@@ -193,14 +184,11 @@ export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
 // =====================================================================
 
 async function saveYes(patient: Patient, name: string) {
-  // Yes path: stamp success columns + advance stage. Also reset
-  // MN Attempts back to "Attempt 1" so the Chase Clinicals tab starts
-  // fresh (the column is shared across stages).
-  const today = formatDateInput(new Date());
-  await writeText(patient.id, COL.receiptConfirmedName, name);
-  await writeDate(patient.id, COL.receiptConfirmedDate, today);
-  await writeStatusIndex(patient.id, COL.mnAttempts, MN_ATTEMPTS_INDEX.attempt1);
-  await writeStatusIndex(patient.id, COL.subStage, SUB_STAGE_INDEX.chase);
+  // Yes path: write the chase recipient (the person who said the
+  // clinicals are on the way) and advance Stage Advancer to Completed.
+  // No date column for chase success — the stage advance is the signal.
+  await writeText(patient.id, COL.chaseRecipientName, name);
+  await writeStatusIndex(patient.id, COL.subStage, SUB_STAGE_INDEX.completed);
 }
 
 async function saveNo({
@@ -216,15 +204,13 @@ async function saveNo({
   nextSlot: "Attempt 2" | "Attempt 3" | "Escalate";
   nextActionDateInput: string;
 }) {
-  // 1) Write the attempt's "Name — date" string into the matching column.
   const columnId =
     attempt === 1
-      ? COL.confirmAttempt1
+      ? COL.chaseAttempt1
       : attempt === 2
-        ? COL.confirmAttempt2
-        : COL.confirmAttempt3;
+        ? COL.chaseAttempt2
+        : COL.chaseAttempt3;
   await writeText(patient.id, columnId, value);
-  // 2) Bump MN Attempts.
   const mnIdx =
     nextSlot === "Attempt 2"
       ? MN_ATTEMPTS_INDEX.attempt2
@@ -232,7 +218,6 @@ async function saveNo({
         ? MN_ATTEMPTS_INDEX.attempt3
         : MN_ATTEMPTS_INDEX.escalate;
   await writeStatusIndex(patient.id, COL.mnAttempts, mnIdx);
-  // 3) Either set escalation flag (if 3rd failure) or write next action date.
   if (nextSlot === "Escalate") {
     await writeStatusIndex(patient.id, COL.escalation, ESCALATION_INDEX.required);
   } else if (nextActionDateInput) {
@@ -315,29 +300,35 @@ function ContactField({
   );
 }
 
-function RequestSentBanner({ patient }: { patient: Patient }) {
-  const sent = patient.requestSentAt;
-  if (!sent) {
+function ReceiptConfirmedBanner({ patient }: { patient: Patient }) {
+  // Shows what we already know coming into Chase — who confirmed
+  // receipt and when. Helps the agent reference the prior step on the
+  // call ("you confirmed receipt on Apr 30 — do you have the chart back?").
+  const date = patient.receiptConfirmedDate;
+  const name = patient.receiptConfirmedName;
+  if (!date && !name) {
     return (
       <section className="rounded-xl border bg-amber-50 border-amber-200 px-5 py-3 flex items-center gap-3">
         <AlertTriangle className="h-4 w-4 text-amber-700 shrink-0" />
         <div>
-          <p className="text-sm font-semibold text-amber-900">No Request Sent date on file</p>
+          <p className="text-sm font-semibold text-amber-900">No receipt-confirmed details on file</p>
           <p className="text-[11px] text-amber-800">
-            Confirm the request actually went out before calling — the column is blank on Monday.
+            Receipt Confirmed Name + Date are blank on Monday — re-check the prior step before calling.
           </p>
         </div>
       </section>
     );
   }
-  const formatted = formatSent(sent);
+  const formatted = date ? formatDateLong(date) : "(no date)";
   return (
     <section className="rounded-xl border bg-emerald-50 border-emerald-200 px-5 py-3 flex items-center gap-3">
       <CheckCircle2 className="h-4 w-4 text-emerald-700 shrink-0" />
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-emerald-900">Request sent</p>
+        <p className="text-sm font-semibold text-emerald-900">Receipt confirmed</p>
         <p className="text-[11px] text-emerald-800">
-          {formatted} — confirm with the doctor's office that they received the fax / email below.
+          {formatted}
+          {name ? ` — by ${name}` : ""}
+          . Now chasing for the actual clinicals.
         </p>
       </div>
     </section>
@@ -345,18 +336,13 @@ function RequestSentBanner({ patient }: { patient: Patient }) {
 }
 
 function FilesPanel({ files }: { files: ReturnType<typeof useMondayFiles> }) {
-  // The agent should be able to see exactly which files were sent so they
-  // can describe them on the call.
   const groups: { label: string; entries: MondayFileEntry[] }[] = [
     { label: "MN Request Letter", entries: files.mnRequestLetter },
     { label: "CGM Script Template", entries: files.cgmTemplate },
     { label: "Insulin Pump Script Template", entries: files.ipTemplate },
     { label: "Clinical Files", entries: files.clinicalFiles },
   ];
-  const flat = groups.flatMap((g) =>
-    g.entries.map((f) => ({ group: g.label, file: f })),
-  );
-
+  const flat = groups.flatMap((g) => g.entries.map((f) => ({ group: g.label, file: f })));
   return (
     <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
       <div>
@@ -364,10 +350,9 @@ function FilesPanel({ files }: { files: ReturnType<typeof useMondayFiles> }) {
           Files attached to this request
         </p>
         <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-          Open any of these in a new tab to confirm what the doctor's office should have on file.
+          What we previously sent — handy if the office asks what they should be looking for.
         </p>
       </div>
-
       {files.loading && flat.length === 0 ? (
         <div className="flex items-center gap-2 px-3 h-9 rounded-md border border-dashed bg-muted/20 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" /> Loading…
@@ -463,8 +448,8 @@ function ActiveAttemptCard({
           </h3>
           <p className="text-[11px] text-muted-foreground mt-0.5">
             {isLastAttempt
-              ? "Final attempt — if not confirmed, the patient will be flagged for escalation."
-              : "Call the doctor's office to confirm receipt."}
+              ? "Final attempt — if clinicals aren't sent, the patient will be flagged for escalation."
+              : "Call the doctor's office to confirm the clinicals are sent."}
           </p>
         </div>
         {isLastAttempt && (
@@ -475,7 +460,6 @@ function ActiveAttemptCard({
       </div>
 
       <div className="p-5 space-y-4">
-        {/* Name */}
         <div>
           <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Who answered the call?
@@ -488,10 +472,9 @@ function ActiveAttemptCard({
           />
         </div>
 
-        {/* Yes / No */}
         <div>
           <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Did they confirm receipt?
+            Did they send the clinicals?
           </label>
           <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
@@ -504,7 +487,7 @@ function ActiveAttemptCard({
               }`}
             >
               <Check className="h-4 w-4 text-emerald-600" />
-              <span>Yes — confirmed</span>
+              <span>Yes — clinicals on the way</span>
             </button>
             <button
               type="button"
@@ -516,12 +499,11 @@ function ActiveAttemptCard({
               }`}
             >
               <XCircle className="h-4 w-4 text-rose-600" />
-              <span>No — not yet</span>
+              <span>No — still pending</span>
             </button>
           </div>
         </div>
 
-        {/* Next action date — only shown when "No" is selected */}
         {confirmed === "no" && (
           <div>
             <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -552,7 +534,7 @@ function EscalatedCard() {
           Escalated — awaiting human review
         </h3>
         <p className="text-[11px] text-rose-800 mt-0.5">
-          All 3 confirm-receipt attempts came back unsuccessful. Notes are still editable below.
+          All 3 chase attempts came back unsuccessful. Notes are still editable below.
         </p>
       </div>
     </section>
@@ -604,9 +586,11 @@ function SaveBar({
   onSave: () => void;
 }) {
   let hint = "Pick Yes or No to enable save.";
-  if (confirmed === "yes") hint = "Saves the confirmation, advances to Chase Clinicals.";
-  else if (confirmed === "no" && attemptNumber < 3) hint = `Logs Attempt ${attemptNumber} as unsuccessful and schedules the next callback.`;
-  else if (confirmed === "no" && attemptNumber === 3) hint = "Logs Attempt 3 as unsuccessful and flags Escalation Required.";
+  if (confirmed === "yes") hint = "Saves the chase recipient and advances to Completed.";
+  else if (confirmed === "no" && attemptNumber < 3)
+    hint = `Logs Attempt ${attemptNumber} as unsuccessful and schedules the next callback.`;
+  else if (confirmed === "no" && attemptNumber === 3)
+    hint = "Logs Attempt 3 as unsuccessful and flags Escalation Required.";
   return (
     <div className="flex flex-col items-center gap-2 pt-1">
       <Button
@@ -643,7 +627,6 @@ interface AttemptChip {
   raw: string;
 }
 
-// Format used for the per-attempt text columns: "Donna — 5/1/26".
 const VALUE_REGEX = /^(.+?)\s+—\s+(.+)$/;
 
 function parseAttemptValue(attempt: number, raw: string): AttemptChip {
@@ -684,18 +667,13 @@ function formatDateShort(d: Date): string {
   return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
 }
 
-function formatSent(iso: string): string {
-  // Monday's date+time text comes back as "2026-04-30 20:00:00 UTC" or
-  // "2026-04-30 20:00:00" — normalize and render in ET.
-  const cleaned = iso.replace(/\s+UTC$/, "Z").replace(" ", "T");
-  const d = new Date(cleaned);
+function formatDateLong(iso: string): string {
+  const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("en-US", {
+  return d.toLocaleDateString("en-US", {
     timeZone: "America/New_York",
     month: "short",
     day: "numeric",
     year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }) + " ET";
+  });
 }

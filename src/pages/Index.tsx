@@ -3,14 +3,14 @@ import { useMondayPatients, type TabKey } from "@/hooks/useMondayPatients";
 import type { Patient } from "@/lib/workflow";
 import { EvaluatePanel } from "@/components/dashboard/EvaluatePanel";
 import { SendRequestPanel } from "@/components/dashboard/SendRequestPanel";
-import { ReceiptChasePanel } from "@/components/dashboard/ReceiptChasePanel";
 import { ConfirmReceiptPanel } from "@/components/dashboard/ConfirmReceiptPanel";
+import { ChaseClinicalsPanel } from "@/components/dashboard/ChaseClinicalsPanel";
 import { PatientsSidebar } from "@/components/dashboard/PatientsSidebar";
 import { PatientProfileCard } from "@/components/dashboard/PatientProfileCard";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { RotateCcw, Stethoscope, AlertTriangle } from "lucide-react";
+import { RotateCcw, Stethoscope } from "lucide-react";
 import { toast } from "sonner";
 import { clearEvalState } from "@/lib/evalState";
 
@@ -135,9 +135,8 @@ const Index = () => {
                   </TabsContent>
 
                   <TabsContent value="chase" className="space-y-5 mt-0">
-                    <PatientProfileCard patient={selected} />
-                    <DisconnectedBanner />
-                    <ReceiptChasePanel patient={selected} mode="chase" onUpdate={onUpdate} />
+                    <PatientProfileCard patient={selected} defaultDoctorOpen />
+                    <ChaseClinicalsPanel patient={selected} onUpdate={onUpdate} />
                   </TabsContent>
                 </>
               )}
@@ -148,16 +147,5 @@ const Index = () => {
     </SidebarProvider>
   );
 };
-
-function DisconnectedBanner() {
-  return (
-    <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 flex items-center gap-2">
-      <AlertTriangle className="h-4 w-4 shrink-0" />
-      <span>
-        <strong>Monday writes disabled.</strong> This tab is in playground mode while we rebuild — changes here will not sync.
-      </span>
-    </div>
-  );
-}
 
 export default Index;
