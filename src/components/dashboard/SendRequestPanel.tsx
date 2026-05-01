@@ -721,6 +721,8 @@ function daysSince(iso?: string): number | null {
   return Math.floor(ms / (1000 * 60 * 60 * 24));
 }
 
+const PARACHUTE_URL = "https://dme.parachutehealth.com/u/r/BGP3-YIEG1-Z8-SL/dashboard";
+
 function SendActionCard({
   patient,
   sending,
@@ -735,6 +737,12 @@ function SendActionCard({
   const alreadySent = advancer === "Complete";
   const sentDate = formatDate(patient.requestSentAt);
   const sentDays = daysSince(patient.requestSentAt);
+  const isParachute = method === "Parachute";
+
+  const handleClick = () => {
+    if (isParachute) window.open(PARACHUTE_URL, "_blank");
+    onMarkSent();
+  };
 
   return (
     <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
@@ -786,14 +794,19 @@ function SendActionCard({
       <div className="flex justify-end pt-1">
         <Button
           size="lg"
-          onClick={onMarkSent}
+          onClick={handleClick}
           disabled={sending}
           className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-elevate"
         >
           {sending ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Marking Sent…
+              {isParachute ? "Opening Parachute…" : "Marking Sent…"}
+            </>
+          ) : isParachute ? (
+            <>
+              <ExternalLink className="h-4 w-4" />
+              Send via Parachute
             </>
           ) : (
             <>
