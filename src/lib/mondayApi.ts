@@ -68,6 +68,9 @@ export const COL = {
   generalMnInvalidReasons: "dropdown_mm2xppn8",
   cgmMnInvalidReasons: "dropdown_mm2xncfh",
   ipMnInvalidReasons: "dropdown_mm2xgg2y",
+  /** Doctor-facing rolled-up ask list (replaces the 3 raw dropdowns above
+   *  in the Send Request UI + the MN Request Letter PDF). */
+  mnRequestConsolidated: "dropdown_mm2yd3a2",
   requestSentAt: "date_mm2yg8x8",
 
   // Script generation
@@ -119,6 +122,7 @@ export const READ_COLUMN_IDS: string[] = [
   // MRs
   COL.mrsClinicals, COL.lastVisit, COL.mrExpiryDate, COL.medicalNecessity, COL.mnEvalNotes,
   COL.generalMnInvalidReasons, COL.cgmMnInvalidReasons, COL.ipMnInvalidReasons,
+  COL.mnRequestConsolidated,
   COL.requestSentAt,
   // Scripts
   COL.generateCgmScript, COL.generateIpScript,

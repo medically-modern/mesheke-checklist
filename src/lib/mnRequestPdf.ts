@@ -662,11 +662,17 @@ export async function generateMnRequestPdf(patient: Patient): Promise<Uint8Array
   const ip = ipBlock(patient.ipCoveragePath);
   const blocks = [cgm, ip].filter((b): b is TemplateBlock => b !== null);
 
-  const allReasons = [
-    ...splitReasons(patient.generalMnInvalidReasons),
-    ...splitReasons(patient.cgmMnInvalidReasons),
-    ...splitReasons(patient.ipMnInvalidReasons),
-  ];
+  // Prefer the consolidated, doctor-facing ask list. Fall back to the
+  // legacy 3-bucket breakdown only if the new column isn't populated yet
+  // (older patients evaluated before the rollup logic shipped).
+  const consolidated = splitReasons(patient.mnRequestConsolidated);
+  const allReasons = consolidated.length > 0
+    ? consolidated
+    : [
+        ...splitReasons(patient.generalMnInvalidReasons),
+        ...splitReasons(patient.cgmMnInvalidReasons),
+        ...splitReasons(patient.ipMnInvalidReasons),
+      ];
 
   if (blocks.length === 0 && allReasons.length > 0) {
     blocks.push({

@@ -241,7 +241,10 @@ export function EvaluatePanel({ patient, resetVersion = 0 }: Props) {
     [state, patient, showCgm, showIp],
   );
 
-  const preview = useMemo(() => buildMondayPreview(state, validity), [state, validity]);
+  const preview = useMemo(
+    () => buildMondayPreview(state, validity, patient),
+    [state, validity, patient],
+  );
 
   // Send to Monday — batched write of every column the rep has edited locally.
   // Generate Script triggers and template deletes are immediate elsewhere.
@@ -350,6 +353,18 @@ export function EvaluatePanel({ patient, resetVersion = 0 }: Props) {
           patient.id,
           COL.ipMnInvalidReasons,
           preview.ipMnInvalidReasons,
+        ),
+    });
+    // Consolidated, doctor-facing ask list — drives the Send Request UI
+    // and the MN Request Letter PDF. Replaces the 3 raw reason dropdowns
+    // for downstream consumers.
+    tasks.push({
+      label: "MN Request Consolidated",
+      run: () =>
+        writeDropdownLabels(
+          patient.id,
+          COL.mnRequestConsolidated,
+          preview.mnRequestConsolidated,
         ),
     });
     tasks.push({

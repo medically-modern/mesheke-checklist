@@ -63,6 +63,9 @@ export interface Patient {
   generalMnInvalidReasons?: string;
   cgmMnInvalidReasons?: string;
   ipMnInvalidReasons?: string;
+  /** Doctor-facing rolled-up ask list (the consolidated dropdown that
+   *  replaces the 3 raw reason dropdowns end-to-end). */
+  mnRequestConsolidated?: string;
   requestSentAt?: string;
 
   // Script generation

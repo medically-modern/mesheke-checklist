@@ -100,6 +100,7 @@ export function mondayItemToPatient(item: MondayItem): Patient {
     generalMnInvalidReasons: col(item, "dropdown_mm2xppn8") || undefined,
     cgmMnInvalidReasons: col(item, "dropdown_mm2xncfh") || undefined,
     ipMnInvalidReasons: col(item, "dropdown_mm2xgg2y") || undefined,
+    mnRequestConsolidated: col(item, "dropdown_mm2yd3a2") || undefined,
     requestSentAt: col(item, "date_mm2yg8x8") || undefined,
     generateCgmScript: col(item, "color_mm1w2ey") || undefined,
     generateIpScript: col(item, "color_mm1w4wd8") || undefined,

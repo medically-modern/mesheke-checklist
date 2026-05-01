@@ -591,24 +591,21 @@ function CollapsibleHeader({
 
 function WhatsNeededCard({ patient }: { patient: Patient }) {
   const established = patient.medicalNecessity === "Established";
-  const general = splitDropdownText(patient.generalMnInvalidReasons);
-  const cgm = splitDropdownText(patient.cgmMnInvalidReasons);
-  const ip = splitDropdownText(patient.ipMnInvalidReasons);
-  const allClean = established && general.length === 0 && cgm.length === 0 && ip.length === 0;
-
-  const serving = patient.serving;
-  const showCgm = serving === "CGM" || serving === "Insulin Pump + CGM" || serving === "Supplies + CGM";
-  const showIp = serving !== "CGM";
+  // Doctor-facing rolled-up list — replaces the 3 raw General/CGM/IP
+  // breakdowns. Single source of truth for what Samantha says on the
+  // call and what the MN Request Letter PDF lists.
+  const asks = splitDropdownText(patient.mnRequestConsolidated);
+  const allClean = established && asks.length === 0;
 
   return (
     <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            What&apos;s Still Needed
+            Ask the doctor for
           </p>
           <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-            Read from Monday — set on the Evaluate tab.
+            Rolled up from the Evaluate tab — what to actually request on the call.
           </p>
         </div>
         {established ? (
@@ -628,12 +625,22 @@ function WhatsNeededCard({ patient }: { patient: Patient }) {
         <p className="text-xs text-muted-foreground italic">
           No outstanding reasons — patient is ready.
         </p>
+      ) : asks.length === 0 ? (
+        <p className="text-xs text-amber-700 italic">
+          MN is not established but no consolidated ask list yet — go back to the Evaluate tab and Send to Monday so the new column populates.
+        </p>
       ) : (
-        <div className="space-y-2">
-          <ReasonRow label="General" reasons={general} />
-          {showCgm && <ReasonRow label="CGM" reasons={cgm} />}
-          {showIp && <ReasonRow label="Insulin Pump" reasons={ip} />}
-        </div>
+        <ul className="space-y-1.5">
+          {asks.map((a) => (
+            <li
+              key={a}
+              className="flex items-start gap-2 text-xs px-3 py-1.5 rounded-md border bg-rose-50 border-rose-200 text-rose-900"
+            >
+              <X className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span className="font-medium">{a}</span>
+            </li>
+          ))}
+        </ul>
       )}
 
       {patient.mnEvalNotes && (

@@ -283,6 +283,113 @@ export function deriveValidity(
   };
 }
 
+// ---- Doctor-facing ask list ----
+//
+// Rolls the granular validity reasons into a short list of actionable
+// requests phrased for the doctor. Two tiers:
+//   1. Whole document is missing → ask for the document (path-aware
+//      sub-clauses for IP Script / Medical Records).
+//   2. Document is on file but specific items are missing → ask for an
+//      updated document with the specific items called out.
+//
+// Things the helper deliberately does NOT surface:
+//   - "Diagnosis missing" — diagnosis is read off Medical Records or a
+//     script; if both are present and diagnosis is still empty, that's
+//     an agent-side classification task, not a doctor ask.
+//   - "CGM Coverage Path missing" / "IP Coverage Path missing" — same
+//     story; coverage path is the agent's classification of the records.
+
+export function computeDoctorAskList(
+  state: EvalState,
+  patient: Patient,
+  showCgm: boolean,
+  showIp: boolean,
+): string[] {
+  const asks: string[] = [];
+
+  // ---- Medical Records ----
+  const mrReceived = state.mrReceived === "Yes";
+  const lastVisitSet = !!state.lastVisitDate;
+  const { expired } = getMrExpiry(state.lastVisitDate);
+
+  if (!mrReceived) {
+    asks.push("Medical Records");
+    // Don't surface MR sub-items — a fresh MR will resolve them.
+  } else if (expired) {
+    asks.push("Updated Medical Records (current within 6 months)");
+    // Don't surface MR sub-items — a fresh MR will resolve them.
+  } else {
+    // MR is present and current — collect any specific gaps.
+    const gaps: string[] = [];
+    if (!lastVisitSet) gaps.push("last visit date");
+    if (showIp && state.ipCoveragePath) {
+      const cfg = IP_PATH_FIELDS[state.ipCoveragePath];
+      if (cfg.showEducation && state.diabetesEducation !== "Yes")
+        gaps.push("diabetes education");
+      if (cfg.show3Injections && state.threeInjections !== "Yes")
+        gaps.push("3+ insulin injections per day");
+      if (cfg.showCgmUse && state.cgmUse !== "Yes") gaps.push("CGM use");
+      if (cfg.showBsIssues && state.bloodSugarIssues !== "Yes")
+        gaps.push("blood sugar issues");
+    }
+    if (gaps.length > 0) {
+      asks.push(`Updated Medical Records — must include ${gaps.join(", ")}`);
+    }
+  }
+
+  // ---- CGM Script ----
+  if (showCgm) {
+    if (state.cgmScriptValid === "Missing") asks.push("CGM Script");
+    else if (state.cgmScriptValid === "Invalid") asks.push("Updated CGM Script");
+  }
+
+  // ---- Insulin Pump Script ----
+  if (showIp && state.ipCoveragePath) {
+    const cfg = IP_PATH_FIELDS[state.ipCoveragePath];
+    if (state.ipScriptValid === "Missing") {
+      // Path-aware base ask — bake in OOW requirements so the doctor
+      // doesn't send back a script we'd just have to ask to update.
+      let title = "Insulin Pump Script";
+      if (state.ipCoveragePath === "OOW Pump") {
+        title = "Insulin Pump Script (must include OOW date and malfunction note)";
+      }
+      asks.push(title);
+    } else if (state.ipScriptValid === "Invalid") {
+      asks.push("Updated Insulin Pump Script");
+    } else if (state.ipScriptValid === "Valid") {
+      // Script is on file — collect IP-script-specific gaps.
+      const gaps: string[] = [];
+      if (cfg.showOow) {
+        const oow = isOowDateValid(state.oowDate, patient.primaryInsurance);
+        if (!oow) gaps.push("OOW date");
+        else if (!oow.valid) {
+          const yrs = (oow.thresholdDays / 365.25).toFixed(0);
+          gaps.push(`OOW date (must be ≥${yrs} years old)`);
+        }
+      }
+      if (cfg.showMalfunction && state.malfunction !== "Yes")
+        gaps.push("malfunction note");
+      if (gaps.length > 0) {
+        asks.push(`Updated Insulin Pump Script — must include ${gaps.join(", ")}`);
+      }
+    }
+  }
+
+  // ---- Letter of Medical Necessity ----
+  if (showIp && state.ipCoveragePath) {
+    const cfg = IP_PATH_FIELDS[state.ipCoveragePath];
+    if (cfg.showLmn) {
+      if (state.lmn === "No" || state.lmn === undefined) {
+        asks.push("Letter of Medical Necessity");
+      } else if (state.lmn === "Yes, but Invalid") {
+        asks.push("Updated Letter of Medical Necessity");
+      }
+    }
+  }
+
+  return asks;
+}
+
 // ---- Preview payload (what would be written to Monday) ----
 
 export interface MondayPreview {
@@ -296,6 +403,10 @@ export interface MondayPreview {
   generalMnInvalidReasons: string[];
   cgmMnInvalidReasons: string[];
   ipMnInvalidReasons: string[];
+  /** Consolidated, doctor-facing ask list — what the agent reads on the call.
+   *  Drives the MN Request Consolidated dropdown column on Monday and the
+   *  MN Request Letter PDF body. */
+  mnRequestConsolidated: string[];
   generateCgmScript?: string;
   generateIpScript?: string;
 }
@@ -303,8 +414,15 @@ export interface MondayPreview {
 export function buildMondayPreview(
   state: EvalState,
   validity: ValidityResult,
+  patient: Patient,
 ): MondayPreview {
   const { expiry } = getMrExpiry(state.lastVisitDate);
+  const consolidated = computeDoctorAskList(
+    state,
+    patient,
+    validity.sections.cgm.shown,
+    validity.sections.ip.shown,
+  );
   return {
     // When a patient isn't being served that product, the preview reflects
     // what'll be written to Monday: "Not Serving".
@@ -322,6 +440,7 @@ export function buildMondayPreview(
     generalMnInvalidReasons: validity.generalReasons,
     cgmMnInvalidReasons: validity.sections.cgm.shown ? validity.cgmReasons : [],
     ipMnInvalidReasons: validity.sections.ip.shown ? validity.ipReasons : [],
+    mnRequestConsolidated: consolidated,
     generateCgmScript: state.generateCgmScript,
     generateIpScript: state.generateIpScript,
   };
