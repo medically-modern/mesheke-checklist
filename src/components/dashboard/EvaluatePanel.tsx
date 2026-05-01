@@ -425,7 +425,7 @@ export function EvaluatePanel({ patient, resetVersion = 0 }: Props) {
               onChange={(v) => update("cgmScriptValid", v as ValidInvalid)}
             />
             <StatusSelect
-              label="Coverage Path"
+              label="CGM Coverage Path"
               value={state.cgmCoveragePath}
               options={CGM_COVERAGE_OPTS}
               onChange={(v) => setCgmCoveragePath(v as CgmCoveragePath)}
