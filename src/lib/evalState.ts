@@ -322,6 +322,13 @@ export function computeDoctorAskList(
     // MR is present and current — collect any specific gaps.
     const gaps: string[] = [];
     if (!lastVisitSet) gaps.push("last visit date");
+    // CGM coverage path "Invalid" means the records don't have either
+    // insulin language or hypoglycemia language — doctor needs to add
+    // one of them. (Path "missing" is an agent classification task and
+    // is suppressed.)
+    if (showCgm && state.cgmCoveragePath === "Invalid") {
+      gaps.push("insulin or hypoglycemia language");
+    }
     if (showIp && state.ipCoveragePath) {
       const cfg = IP_PATH_FIELDS[state.ipCoveragePath];
       if (cfg.showEducation && state.diabetesEducation !== "Yes")
@@ -338,9 +345,10 @@ export function computeDoctorAskList(
   }
 
   // ---- CGM Script ----
-  if (showCgm) {
-    if (state.cgmScriptValid === "Missing") asks.push("CGM Script");
-    else if (state.cgmScriptValid === "Invalid") asks.push("Updated CGM Script");
+  // No "Updated CGM Script" variant — script is either there or it isn't,
+  // and an invalid script just means we need a fresh one.
+  if (showCgm && (state.cgmScriptValid === "Missing" || state.cgmScriptValid === "Invalid")) {
+    asks.push("CGM Script");
   }
 
   // ---- Insulin Pump Script ----
