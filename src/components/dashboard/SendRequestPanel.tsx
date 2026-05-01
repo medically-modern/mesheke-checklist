@@ -871,11 +871,11 @@ function SendActionCard({
   return (
     <section className="rounded-xl bg-card border shadow-card overflow-hidden">
       {/* Header — title + sent status grouped together */}
-      <div className="flex items-start justify-between gap-3 flex-wrap px-5 py-4 border-b bg-muted/30">
+      <div className="flex items-center justify-between gap-4 flex-wrap px-6 py-4 border-b bg-muted/30">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold">Send Request</h3>
+          <h3 className="text-sm font-semibold leading-tight">Send Request</h3>
           {sentDate ? (
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-1">
               Last sent <span className="font-medium text-foreground">{sentDate}</span>
               {sentDays !== null && sentDays >= 0 && (
                 <span className="text-muted-foreground/70">
@@ -885,7 +885,7 @@ function SendActionCard({
               )}
             </p>
           ) : (
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-1">
               Two-step flow — send the request, then advance the stage.
             </p>
           )}
@@ -904,7 +904,7 @@ function SendActionCard({
 
       {/* Two numbered step subsections — same visual pattern as the
          Insurance Panel Step 1/2/3 layout, so the eye reads top→bottom. */}
-      <div className="p-5 space-y-3">
+      <div className="px-6 py-5 space-y-4">
         <StepBlock
           number={1}
           title="Send the request"
@@ -992,17 +992,21 @@ function StepBlock({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border bg-background/60 p-4">
-      <div className="flex items-start gap-3">
-        <div className="h-7 w-7 rounded-full border-2 border-border bg-background flex items-center justify-center text-xs font-bold shrink-0">
+    <div className="rounded-lg border bg-background/60 px-5 py-4">
+      <div className="flex items-start gap-4">
+        <div className="h-8 w-8 rounded-full border-2 border-border bg-background flex items-center justify-center text-sm font-bold shrink-0">
           {number}
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold leading-tight">{title}</p>
-          {subtitle && (
-            <p className="text-[11px] text-muted-foreground mt-0.5">{subtitle}</p>
-          )}
-          <div className="mt-3">{children}</div>
+        <div className="min-w-0 flex-1 space-y-3">
+          <div>
+            <p className="text-sm font-semibold leading-snug">{title}</p>
+            {subtitle && (
+              <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                {subtitle}
+              </p>
+            )}
+          </div>
+          <div>{children}</div>
         </div>
       </div>
     </div>
