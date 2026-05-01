@@ -23,6 +23,7 @@ const TEXT = rgb(0x40 / 255, 0x40 / 255, 0x40 / 255);
 const GRAY = rgb(0x66 / 255, 0x66 / 255, 0x66 / 255); // #666666
 const LIGHT = rgb(0xf3 / 255, 0xf3 / 255, 0xf3 / 255); // #F3F3F3
 const BORDER = rgb(0.78, 0.78, 0.78);
+const LINK_TEAL = rgb(0x11 / 255, 0x55 / 255, 0x55 / 255); // #115555 — teal link color for Fax/Email labels
 
 // ---- Asset URLs -------------------------------------------------------
 const BASE = import.meta.env.BASE_URL;
@@ -363,12 +364,12 @@ function drawHeader(ctx: DrawCtx) {
     height: logoH,
   });
 
-  // Right side: Fax + Email block
+  // Right side: Fax + Email block — labels in teal with underline (link style)
   const rightX = width - marginX;
   const fax = "(347) 503 - 7148";
   const email = "records@medicallymodern.com";
-  const labelSize = 11;
-  const valueSize = 11;
+  const labelSize = 14;
+  const valueSize = 14;
   const faxLabelW = fonts.bold.widthOfTextAtSize("Fax: ", labelSize);
   const faxValueW = fonts.regular.widthOfTextAtSize(fax, valueSize);
   const emailLabelW = fonts.bold.widthOfTextAtSize("Email: ", labelSize);
@@ -377,47 +378,47 @@ function drawHeader(ctx: DrawCtx) {
   const emailLineW = emailLabelW + emailValueW;
 
   const faxY = ctx.y - 22;
-  page.drawText("Fax: ", { x: rightX - faxLineW, y: faxY, size: labelSize, font: fonts.bold, color: TEXT });
+  const faxLabelX = rightX - faxLineW;
+  page.drawText("Fax:", { x: faxLabelX, y: faxY, size: labelSize, font: fonts.bold, color: LINK_TEAL });
+  const faxLabelOnlyW = fonts.bold.widthOfTextAtSize("Fax:", labelSize);
+  page.drawLine({ start: { x: faxLabelX, y: faxY - 2 }, end: { x: faxLabelX + faxLabelOnlyW, y: faxY - 2 }, thickness: 0.8, color: LINK_TEAL });
+  page.drawText(" ", { x: faxLabelX + faxLabelOnlyW, y: faxY, size: labelSize, font: fonts.bold, color: TEXT });
   page.drawText(fax, { x: rightX - faxLineW + faxLabelW, y: faxY, size: valueSize, font: fonts.regular, color: TEXT });
 
-  const emailY = ctx.y - 38;
-  page.drawText("Email: ", { x: rightX - emailLineW, y: emailY, size: labelSize, font: fonts.bold, color: TEXT });
+  const emailY = ctx.y - 42;
+  const emailLabelX = rightX - emailLineW;
+  page.drawText("Email:", { x: emailLabelX, y: emailY, size: labelSize, font: fonts.bold, color: LINK_TEAL });
+  const emailLabelOnlyW = fonts.bold.widthOfTextAtSize("Email:", labelSize);
+  page.drawLine({ start: { x: emailLabelX, y: emailY - 2 }, end: { x: emailLabelX + emailLabelOnlyW, y: emailY - 2 }, thickness: 0.8, color: LINK_TEAL });
+  page.drawText(" ", { x: emailLabelX + emailLabelOnlyW, y: emailY, size: labelSize, font: fonts.bold, color: TEXT });
   page.drawText(email, { x: rightX - emailLineW + emailLabelW, y: emailY, size: valueSize, font: fonts.regular, color: TEXT });
 
-  ctx.y -= Math.max(logoH, 50);
+  ctx.y -= Math.max(logoH, 55);
 
-  // Teal divider
+  // Teal divider — full width
   page.drawLine({
     start: { x: marginX, y: ctx.y },
     end: { x: width - marginX, y: ctx.y },
-    thickness: 1.5,
+    thickness: 2,
     color: TEAL,
   });
-  ctx.y -= 30;
+  ctx.y -= 16;
 
-  // Title
+  // Title — clean teal text, no underline (matches Google template)
   const title = "Medical Necessity Request";
   page.drawText(title, {
     x: marginX,
-    y: ctx.y - 30,
-    size: 36,
+    y: ctx.y - 36,
+    size: 38,
     font: fonts.bold,
     color: TEAL,
   });
-  // Underline the title (Word doc has it underlined)
-  const titleW = fonts.bold.widthOfTextAtSize(title, 36);
-  page.drawLine({
-    start: { x: marginX, y: ctx.y - 32 - 4 },
-    end: { x: marginX + titleW, y: ctx.y - 32 - 4 },
-    thickness: 1.5,
-    color: TEAL,
-  });
-  ctx.y -= 60;
+  ctx.y -= 64;
 }
 
-function drawSectionHeading(ctx: DrawCtx, text: string) {
+function drawSectionHeading(ctx: DrawCtx, text: string, fontSize = 18) {
   const { page, fonts, marginX } = ctx;
-  const size = 18;
+  const size = fontSize;
   page.drawText(text, {
     x: marginX,
     y: ctx.y - size,
@@ -433,29 +434,41 @@ function drawSectionHeading(ctx: DrawCtx, text: string) {
     thickness: 1,
     color: TEXT,
   });
-  ctx.y -= size + 14;
+  ctx.y -= size + 16;
 }
 
 function drawPatientInfo(ctx: DrawCtx, patient: Patient) {
   drawSectionHeading(ctx, "Patient Information");
+  ctx.y -= 8; // extra space between heading and Name row
 
-  const { page, fonts, marginX } = ctx;
+  const { page, fonts, marginX, width } = ctx;
+  const indent = marginX + 10;
+  const contentW = width - marginX * 2;
+
   // Name + DOB row
-  page.drawText("Name: ", { x: marginX, y: ctx.y, size: 12, font: fonts.bold, color: TEXT });
-  page.drawText(patient.name || "—", { x: marginX + 42, y: ctx.y, size: 12, font: fonts.regular, color: TEXT });
-  const dobX = marginX + 280;
-  page.drawText("Date of Birth: ", { x: dobX, y: ctx.y, size: 12, font: fonts.bold, color: TEXT });
-  page.drawText(patient.dob || "—", { x: dobX + 92, y: ctx.y, size: 12, font: fonts.regular, color: TEXT });
-  ctx.y -= 22;
+  page.drawText("Name:", { x: indent, y: ctx.y, size: 12, font: fonts.bold, color: TEXT });
+  const nameLabelW = fonts.bold.widthOfTextAtSize("Name:", 12);
+  page.drawText(` ${patient.name || ""}`, { x: indent + nameLabelW, y: ctx.y, size: 12, font: fonts.regular, color: TEXT });
+  // DOB pushed right — leaves ~300pt for the name value
+  const dobX = marginX + 340;
+  page.drawText("Date of Birth:", { x: dobX, y: ctx.y, size: 12, font: fonts.bold, color: TEXT });
+  const dobLabelW = fonts.bold.widthOfTextAtSize("Date of Birth:", 12);
+  page.drawText(` ${patient.dob || ""}`, { x: dobX + dobLabelW, y: ctx.y, size: 12, font: fonts.regular, color: TEXT });
+  ctx.y -= 18;
 
-  // Situation line — drawn by caller per block, but we render a single
-  // "Situation:" prefix when there's just one block. Actually we render this
-  // as a part of the block heading. Skip here.
-  ctx.y -= 6;
+  // Horizontal separator line (matches template grid)
+  page.drawLine({
+    start: { x: indent, y: ctx.y },
+    end: { x: marginX + contentW - 10, y: ctx.y },
+    thickness: 0.5,
+    color: BORDER,
+  });
+  ctx.y -= 10;
 }
 
 function drawIntroAndLegend(ctx: DrawCtx) {
-  drawSectionHeading(ctx, "Medical Necessity Requirements");
+  drawSectionHeading(ctx, "Medical Necessity Requirements", 26);
+  ctx.y -= 10; // extra breathing room
 
   const { page, fonts, marginX, width } = ctx;
   const intro =
@@ -463,37 +476,37 @@ function drawIntroAndLegend(ctx: DrawCtx) {
   const lines = wrapText(intro, fonts.italic, 11, width - marginX * 2);
   for (const line of lines) {
     page.drawText(line, { x: marginX, y: ctx.y, size: 11, font: fonts.italic, color: GRAY });
-    ctx.y -= 14;
+    ctx.y -= 16;
   }
-  ctx.y -= 8;
+  ctx.y -= 16;
 
   // Legend: A ✘ means documentation is still needed.   A ✔ means already received.
   let x = marginX;
   const legY = ctx.y;
-  page.drawText("A ", { x, y: legY, size: 13, font: fonts.bold, color: TEXT });
-  x += fonts.bold.widthOfTextAtSize("A ", 13) + 4;
+  page.drawText("A ", { x, y: legY, size: 14, font: fonts.bold, color: TEXT });
+  x += fonts.bold.widthOfTextAtSize("A ", 14) + 2;
   drawX(page, x + 4, legY + 4, RED);
-  x += 14;
-  page.drawText(" means documentation is still needed.   ", {
+  x += 16;
+  page.drawText(" means documentation is still needed.  ", {
     x,
     y: legY,
-    size: 13,
+    size: 14,
     font: fonts.bold,
     color: TEXT,
   });
-  x += fonts.bold.widthOfTextAtSize(" means documentation is still needed.   ", 13);
-  page.drawText("A ", { x, y: legY, size: 13, font: fonts.bold, color: TEXT });
-  x += fonts.bold.widthOfTextAtSize("A ", 13) + 4;
+  x += fonts.bold.widthOfTextAtSize(" means documentation is still needed.  ", 14);
+  page.drawText("A ", { x, y: legY, size: 14, font: fonts.bold, color: TEXT });
+  x += fonts.bold.widthOfTextAtSize("A ", 14) + 2;
   drawCheck(page, x + 4, legY + 4, GREEN);
-  x += 14;
+  x += 16;
   page.drawText(" means already received.", {
     x,
     y: legY,
-    size: 13,
+    size: 14,
     font: fonts.bold,
     color: TEXT,
   });
-  ctx.y -= 28;
+  ctx.y -= 36;
 }
 
 function drawSituation(ctx: DrawCtx, situation: string) {
@@ -514,21 +527,41 @@ const COL_X_STATUS = 0; // relative to table-x
 const COL_X_REQ = 60;
 const COL_X_EX = 220;
 
+function drawTableColumnLines(page: PDFPage, tableX: number, tableW: number, topY: number, bottomY: number) {
+  // Vertical divider: Status | Requirement
+  page.drawLine({
+    start: { x: tableX + COL_X_REQ - 6, y: topY },
+    end: { x: tableX + COL_X_REQ - 6, y: bottomY },
+    thickness: 0.5,
+    color: BORDER,
+  });
+  // Vertical divider: Requirement | Examples
+  page.drawLine({
+    start: { x: tableX + COL_X_EX - 6, y: topY },
+    end: { x: tableX + COL_X_EX - 6, y: bottomY },
+    thickness: 0.5,
+    color: BORDER,
+  });
+}
+
 function drawTableHeader(ctx: DrawCtx) {
   const { page, fonts, marginX, width } = ctx;
   const tableX = marginX;
   const tableW = width - marginX * 2;
-  const rowH = 26;
+  const rowH = 28;
+  const hdrTop = ctx.y + 4;
+  const hdrBottom = ctx.y - rowH + 4;
   page.drawRectangle({
     x: tableX,
-    y: ctx.y - rowH + 4,
+    y: hdrBottom,
     width: tableW,
     height: rowH,
     color: LIGHT,
     borderColor: BORDER,
     borderWidth: 0.5,
   });
-  const baseY = ctx.y - rowH + 4 + 9;
+  drawTableColumnLines(page, tableX, tableW, hdrTop, hdrBottom);
+  const baseY = hdrBottom + 9;
   page.drawText("Status", { x: tableX + COL_X_STATUS + 10, y: baseY, size: 12, font: fonts.bold, color: TEXT });
   page.drawText("Requirement", { x: tableX + COL_X_REQ, y: baseY, size: 12, font: fonts.bold, color: TEXT });
   page.drawText("Examples of simple language for each requirement", {
@@ -562,14 +595,17 @@ function drawTableRow(ctx: DrawCtx, row: ReqRow, allReasons: string[]) {
   const rowH = padY * 2 + linesNeeded * lineH;
 
   // Row border
+  const cellTop = ctx.y;
+  const cellBottom = ctx.y - rowH;
   page.drawRectangle({
     x: tableX,
-    y: ctx.y - rowH,
+    y: cellBottom,
     width: tableW,
     height: rowH,
     borderColor: BORDER,
     borderWidth: 0.5,
   });
+  drawTableColumnLines(page, tableX, tableW, cellTop, cellBottom);
 
   // Status mark
   const received = isReceived(row, allReasons);
