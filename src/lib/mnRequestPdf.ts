@@ -32,8 +32,17 @@ const ROBOTO_ITALIC_URL = `${BASE}fonts/Roboto-Italic.ttf`;
 const LOGO_URL = `${BASE}templates/medically-modern-logo.png`;
 
 async function fetchBytes(url: string): Promise<ArrayBuffer> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch ${url} (${res.status})`);
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (e) {
+    throw new Error(
+      `Network error fetching ${url}: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+  if (!res.ok) {
+    throw new Error(`Asset ${url} returned ${res.status} ${res.statusText}`);
+  }
   return res.arrayBuffer();
 }
 

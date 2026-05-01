@@ -142,50 +142,58 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
     const isFaxOrEmail = method === "Fax" || method === "Email";
     const today = new Date().toISOString().slice(0, 10);
 
-    // For Fax / Email: build the PDF, upload it to the MN Request Letter
-    // column, then flip the Send Request status — that's what triggers the
-    // Supermail automation that emails the doctor (or the @rcfax address).
-    const pdfTasks: { label: string; run: () => Promise<unknown> }[] = [];
+    const failures: string[] = [];
+    let dispatchOk = true;
+
+    // === PHASE 1: Dispatch (Fax/Email only). Sequential — upload needs the PDF
+    // bytes, and the Send Request trigger should only flip after the file is
+    // attached. If any step fails, we DO NOT mark the request as sent.
     if (isFaxOrEmail) {
-      pdfTasks.push({
-        label: "Generate & upload MN Request PDF",
-        run: async () => {
-          const bytes = await generateMnRequestPdf(patient);
-          const safeName = patient.name.replace(/[^a-zA-Z0-9_-]/g, "_");
-          await uploadFileToColumn(
-            patient.id,
-            COL.mnRequestLetter,
-            bytes,
-            `MN_Request_${safeName}.pdf`,
-          );
+      try {
+        const bytes = await generateMnRequestPdf(patient);
+        const safeName = patient.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+        await uploadFileToColumn(
+          patient.id,
+          COL.mnRequestLetter,
+          bytes,
+          `MN_Request_${safeName}.pdf`,
+        );
+        await writeStatusLabel(patient.id, COL.sendRequestTrigger, "Send");
+      } catch (e) {
+        dispatchOk = false;
+        failures.push(
+          `Send via ${method}: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
+
+    // === PHASE 2: Mark sent + advance stage. Only when dispatch succeeded
+    // (or for Parachute, which has no dispatch step here).
+    if (dispatchOk) {
+      const markTasks: { label: string; run: () => Promise<unknown> }[] = [
+        {
+          label: "Request Sent At",
+          run: () => writeDate(patient.id, COL.requestSentAt, today),
         },
-      });
-      pdfTasks.push({
-        label: "Send Request trigger",
-        run: () => writeStatusLabel(patient.id, COL.sendRequestTrigger, "Send"),
+        {
+          label: "Advancer 2B",
+          run: () => writeStatusLabel(patient.id, COL.advancer2b, "Complete"),
+        },
+        {
+          label: "Stage Advancer → Confirm Receipt",
+          run: () => writeStatusLabel(patient.id, COL.subStage, "Confirm Receipt"),
+        },
+      ];
+      const results = await Promise.allSettled(markTasks.map((t) => t.run()));
+      results.forEach((r, i) => {
+        if (r.status === "rejected") {
+          failures.push(
+            `${markTasks[i].label}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`,
+          );
+        }
       });
     }
 
-    const tasks: { label: string; run: () => Promise<unknown> }[] = [
-      ...pdfTasks,
-      {
-        label: "Request Sent At",
-        run: () => writeDate(patient.id, COL.requestSentAt, today),
-      },
-      {
-        label: "Advancer 2B",
-        run: () => writeStatusLabel(patient.id, COL.advancer2b, "Complete"),
-      },
-    ];
-    const results = await Promise.allSettled(tasks.map((t) => t.run()));
-    const failures: string[] = [];
-    results.forEach((r, i) => {
-      if (r.status === "rejected") {
-        failures.push(
-          `${tasks[i].label}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`,
-        );
-      }
-    });
     setSending(false);
     if (failures.length === 0) {
       toast.success(
@@ -194,9 +202,14 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
           : "Request marked as sent — Monday will route to next stage",
       );
     } else {
-      toast.error(`${failures.length} write(s) failed`, {
-        description: failures.slice(0, 3).join("\n"),
-      });
+      toast.error(
+        dispatchOk
+          ? `${failures.length} write(s) failed`
+          : "Send failed — request not marked as sent",
+        {
+          description: failures.slice(0, 3).join("\n"),
+        },
+      );
     }
   }, [patient]);
 
