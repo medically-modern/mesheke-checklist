@@ -252,34 +252,43 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
 // Sub-cards
 // =====================================================================
 
+const PARACHUTE_URL = "https://dme.parachutehealth.com/u/r/BGP3-YIEG1-Z8-SL/dashboard";
+
 function MethodBanner({ patient }: { patient: Patient }) {
   const method = patient.clinicalsMethod ?? "—";
-  const config: Record<string, { className: string; hint: string }> = {
-    Fax: {
-      className: "bg-sky-100 text-sky-900 border-sky-300",
-      hint: patient.doctorFax ? `→ ${patient.doctorFax}` : "(no doctor fax on file)",
-    },
-    Parachute: {
-      className: "bg-indigo-100 text-indigo-900 border-indigo-300",
-      hint: "→ submit via Parachute portal — scripts and request letter handled there",
-    },
-    Email: {
-      className: "bg-teal-100 text-teal-900 border-teal-300",
-      hint: patient.doctorEmail ? `→ ${patient.doctorEmail}` : "(no doctor email on file)",
-    },
-  };
-  const c = config[method] ?? { className: "bg-muted text-muted-foreground border-muted", hint: "" };
+  let className = "bg-muted text-muted-foreground border-muted";
+  let hint: React.ReactNode = "";
+  if (method === "Fax") {
+    className = "bg-sky-100 text-sky-900 border-sky-300";
+    hint = patient.doctorFax ? `→ ${patient.doctorFax}` : "(no doctor fax on file)";
+  } else if (method === "Parachute") {
+    className = "bg-indigo-100 text-indigo-900 border-indigo-300";
+    hint = (
+      <a
+        href={PARACHUTE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 underline font-medium hover:opacity-80"
+      >
+        Submit via Parachute
+        <ExternalLink className="h-3 w-3" />
+      </a>
+    );
+  } else if (method === "Email") {
+    className = "bg-teal-100 text-teal-900 border-teal-300";
+    hint = patient.doctorEmail ? `→ ${patient.doctorEmail}` : "(no doctor email on file)";
+  }
 
   return (
     <section
-      className={`rounded-xl border-2 shadow-card px-5 py-4 flex items-center gap-3 flex-wrap ${c.className}`}
+      className={`rounded-xl border-2 shadow-card px-5 py-4 flex items-center gap-3 flex-wrap ${className}`}
     >
       <Send className="h-5 w-5 shrink-0" />
       <div className="min-w-0">
         <p className="text-[10px] uppercase tracking-wider opacity-70">Clinicals Method</p>
         <p className="text-lg font-semibold leading-tight">{method}</p>
       </div>
-      <span className="text-xs opacity-80 ml-auto truncate">{c.hint}</span>
+      <span className="text-xs opacity-80 ml-auto truncate">{hint}</span>
     </section>
   );
 }
@@ -434,21 +443,19 @@ function WhatsNeededCard({ patient }: { patient: Patient }) {
 }
 
 function ReasonRow({ label, reasons }: { label: string; reasons: string[] }) {
+  const labelClass =
+    "text-[11px] uppercase tracking-wider text-muted-foreground w-[110px] shrink-0 whitespace-nowrap";
   if (reasons.length === 0) {
     return (
-      <div className="flex items-baseline gap-3">
-        <span className="text-[11px] uppercase tracking-wider text-muted-foreground w-[80px]">
-          {label}
-        </span>
+      <div className="flex items-center gap-3 min-h-[24px]">
+        <span className={labelClass}>{label}</span>
         <span className="text-[11px] text-muted-foreground/60 italic">none</span>
       </div>
     );
   }
   return (
-    <div className="flex items-baseline gap-3 flex-wrap">
-      <span className="text-[11px] uppercase tracking-wider text-muted-foreground w-[110px] shrink-0 whitespace-nowrap">
-        {label}
-      </span>
+    <div className="flex items-center gap-3 flex-wrap min-h-[24px]">
+      <span className={labelClass}>{label}</span>
       <div className="flex flex-wrap gap-1">
         {reasons.map((r) => (
           <span
