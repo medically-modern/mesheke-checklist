@@ -176,10 +176,6 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
           run: () => writeDate(patient.id, COL.requestSentAt, today),
         },
         {
-          label: "Advancer 2B",
-          run: () => writeStatusLabel(patient.id, COL.advancer2b, "Complete"),
-        },
-        {
           label: "Stage Advancer → Confirm Receipt",
           run: () => writeStatusLabel(patient.id, COL.subStage, "Confirm Receipt"),
         },
@@ -781,8 +777,7 @@ function SendActionCard({
   onMarkSent: () => void;
 }) {
   const method = patient.clinicalsMethod ?? "Fax";
-  const advancer = patient.advancer2b;
-  const alreadySent = advancer === "Complete";
+  const alreadySent = !!patient.requestSentAt;
   const sentDate = formatDate(patient.requestSentAt);
   const sentDays = daysSince(patient.requestSentAt);
   const isParachute = method === "Parachute";
@@ -825,7 +820,7 @@ function SendActionCard({
         {alreadySent && (
           <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-300 rounded-full px-3 py-1">
             <Check className="h-3.5 w-3.5" />
-            Advancer: Complete
+            Sent
           </span>
         )}
       </div>
