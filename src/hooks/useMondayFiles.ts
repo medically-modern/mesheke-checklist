@@ -16,6 +16,7 @@ const FILE_COLUMN_IDS = [
   COL.finalClinicals,
   COL.cgmTemplate,
   COL.ipTemplate,
+  COL.mnRequestLetter,
 ];
 
 const STATUS_COLUMN_IDS = [COL.generateCgmScript, COL.generateIpScript];
@@ -25,11 +26,12 @@ export interface MondayFilesResult {
   finalClinicals: MondayFileEntry[];
   cgmTemplate: MondayFileEntry[];
   ipTemplate: MondayFileEntry[];
+  mnRequestLetter: MondayFileEntry[];
   generateCgmStatus?: string;
   generateIpStatus?: string;
   loading: boolean; // ONLY true on initial fetch (not background polling)
   error: string | null;
-  refetch: () => void;
+  refetch: () => Promise<void>;
 }
 
 interface UseMondayFilesOptions {
@@ -105,6 +107,7 @@ export function useMondayFiles(
     finalClinicals: data[COL.finalClinicals] ?? EMPTY,
     cgmTemplate: data[COL.cgmTemplate] ?? EMPTY,
     ipTemplate: data[COL.ipTemplate] ?? EMPTY,
+    mnRequestLetter: data[COL.mnRequestLetter] ?? EMPTY,
     generateCgmStatus: statuses[COL.generateCgmScript],
     generateIpStatus: statuses[COL.generateIpScript],
     loading,

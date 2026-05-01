@@ -24,10 +24,7 @@ import {
   saveEvalState,
   type EvalState,
 } from "@/lib/evalState";
-import {
-  generateMnRequestPdf,
-  previewMnRequestPdf,
-} from "@/lib/mnRequestPdf";
+import { generateMnRequestPdf } from "@/lib/mnRequestPdf";
 import { toast } from "sonner";
 import {
   Check,
@@ -111,27 +108,70 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
     [triggerGenerate],
   );
 
-  // ---- Delete script template (clears the file column on Monday) ----
-  const handleDeleteTemplate = useCallback(
-    async (kind: "cgm" | "ip") => {
+  // ---- Delete a file column on Monday (used by script templates and
+  //      MN Request Letter — same pattern). ----
+  const deleteColumn = useCallback(
+    async (columnId: string, label: string) => {
       if (!hasToken()) {
         toast.error("Monday token not configured");
         return;
       }
-      const columnId = kind === "cgm" ? COL.cgmTemplate : COL.ipTemplate;
-      const label = kind === "cgm" ? "CGM" : "Insulin Pump";
       try {
         await deleteFileFromColumn(patient.id, columnId);
         await mondayFiles.refetch();
-        toast.success(`${label} script template deleted`);
+        toast.success(`${label} deleted`);
       } catch (e) {
-        toast.error(`Failed to delete ${label} script template`, {
+        toast.error(`Failed to delete ${label}`, {
           description: e instanceof Error ? e.message : String(e),
         });
       }
     },
     [patient.id, mondayFiles],
   );
+
+  const handleDeleteTemplate = useCallback(
+    (kind: "cgm" | "ip") => {
+      const columnId = kind === "cgm" ? COL.cgmTemplate : COL.ipTemplate;
+      const label = kind === "cgm" ? "CGM script template" : "Insulin Pump script template";
+      return deleteColumn(columnId, label);
+    },
+    [deleteColumn],
+  );
+
+  const handleDeleteMnRequestLetter = useCallback(
+    () => deleteColumn(COL.mnRequestLetter, "MN Request Letter"),
+    [deleteColumn],
+  );
+
+  // ---- Generate MN Request Letter: build PDF + upload to Monday column.
+  //      Behaves like the script templates — file lives on Monday and the
+  //      Send action attaches everything that's there.
+  const [generatingLetter, setGeneratingLetter] = useState(false);
+  const handleGenerateMnRequestLetter = useCallback(async () => {
+    if (!hasToken()) {
+      toast.error("Monday token not configured");
+      return;
+    }
+    setGeneratingLetter(true);
+    try {
+      const bytes = await generateMnRequestPdf(patient);
+      const safeName = patient.name.replace(/[^a-zA-Z0-9_-]/g, "_") || "patient";
+      await uploadFileToColumn(
+        patient.id,
+        COL.mnRequestLetter,
+        bytes,
+        `MN_Request_${safeName}.pdf`,
+      );
+      await mondayFiles.refetch();
+      toast.success("MN Request Letter generated");
+    } catch (e) {
+      toast.error("MN Request Letter generation failed", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setGeneratingLetter(false);
+    }
+  }, [patient, mondayFiles]);
 
   // ---- Auto-clear local Generate state when Monday flips column away from Generate ----
   const prevCgmStatusRef = useRef<string | undefined>(undefined);
@@ -153,9 +193,11 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
     prevIpStatusRef.current = curr;
   }, [mondayFiles.generateIpStatus, update]);
 
-  // ---- Send (dispatch only — no stage advancement). Used by:
-  //      • Fax / Email primary button
-  //      • Parachute optional "also fax" button (rep wants belt-and-suspenders).
+  // ---- Send: trigger Monday status only. Monday already has the
+  //      MN Request Letter + script templates + clinical files in their
+  //      respective file columns; the automation attaches them to the
+  //      outbound fax/email. We just flip the trigger column and stamp
+  //      the Request Sent At column.
   const [sending, setSending] = useState(false);
   const handleSend = useCallback(async () => {
     if (!hasToken()) {
@@ -165,32 +207,15 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
     const method = patient.clinicalsMethod ?? "Fax";
     setSending(true);
     try {
-      let bytes: Uint8Array;
-      try {
-        bytes = await generateMnRequestPdf(patient);
-      } catch (e) {
-        throw new Error(`[1/4 generate PDF] ${e instanceof Error ? e.message : String(e)}`);
-      }
-      try {
-        const safeName = patient.name.replace(/[^a-zA-Z0-9_-]/g, "_");
-        await uploadFileToColumn(
-          patient.id,
-          COL.mnRequestLetter,
-          bytes,
-          `MN_Request_${safeName}.pdf`,
-        );
-      } catch (e) {
-        throw new Error(`[2/4 upload PDF] ${e instanceof Error ? e.message : String(e)}`);
-      }
       try {
         await writeStatusLabel(patient.id, COL.sendRequestTrigger, "Send");
       } catch (e) {
-        throw new Error(`[3/4 trigger Send Request] ${e instanceof Error ? e.message : String(e)}`);
+        throw new Error(`[1/2 trigger Send Request] ${e instanceof Error ? e.message : String(e)}`);
       }
       try {
         await writeDateTime(patient.id, COL.requestSentAt);
       } catch (e) {
-        throw new Error(`[4/4 Request Sent At] ${e instanceof Error ? e.message : String(e)}`);
+        throw new Error(`[2/2 Request Sent At] ${e instanceof Error ? e.message : String(e)}`);
       }
       toast.success(
         method === "Email"
@@ -321,13 +346,21 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
             grouped={isParachute}
           />
 
-          <RequestLetterCard patient={patient} grouped={isParachute} />
+          <RequestLetterCard
+            files={mondayFiles.mnRequestLetter}
+            loading={mondayFiles.loading}
+            generating={generatingLetter}
+            onGenerate={handleGenerateMnRequestLetter}
+            onDelete={handleDeleteMnRequestLetter}
+            grouped={isParachute}
+          />
 
           {isParachute && (
             <OptionalFaxCard
               patient={patient}
               sending={sending}
               onSend={handleSend}
+              mnRequestLetterCount={mondayFiles.mnRequestLetter.length}
             />
           )}
         </>
@@ -339,6 +372,12 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
         completing={completing}
         onSend={handleSend}
         onMarkComplete={handleMarkComplete}
+        attachments={[
+          { label: "MN Request Letter", count: mondayFiles.mnRequestLetter.length, required: true },
+          { label: "CGM Script Template", count: mondayFiles.cgmTemplate.length },
+          { label: "Insulin Pump Script Template", count: mondayFiles.ipTemplate.length },
+          { label: "Clinical Files", count: mondayFiles.clinicalFiles.length },
+        ]}
       />
     </div>
   );
@@ -383,62 +422,51 @@ function ClinicalFilesCard({
   files: MondayFileEntry[];
   loading: boolean;
 }) {
-  const downloadAll = () => {
-    for (const f of files) {
-      const url = f.public_url || f.url;
-      if (url) window.open(url, "_blank");
-    }
-  };
-
   return (
     <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            Clinical Files
-          </p>
-          <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-            Files attached on Monday — download to send alongside the request.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={downloadAll}
-          disabled={files.length === 0 || loading}
-          className="h-8 px-2 text-xs gap-1"
-          title={
-            files.length === 0
-              ? "No Monday files to download"
-              : `Download all ${files.length} file(s) from Monday`
-          }
-        >
-          {loading ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <Download className="h-3 w-3" />
-          )}
-          Download all
-          {files.length > 0 && ` (${files.length})`}
-        </Button>
+      <div>
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">
+          Clinical Files
+        </p>
+        <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+          Read from Monday — these will be attached automatically when you send the request.
+        </p>
       </div>
 
-      {files.length === 0 ? (
+      {loading && files.length === 0 ? (
+        <div className="flex items-center gap-2 px-3 h-9 rounded-md border border-dashed bg-muted/20 text-xs text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" /> Loading…
+        </div>
+      ) : files.length === 0 ? (
         <p className="text-xs text-muted-foreground italic">
           No clinical files attached on Monday.
         </p>
       ) : (
-        <ul className="space-y-1">
+        <div className="space-y-1">
           {files.map((f) => (
-            <li
+            <div
               key={f.assetId}
-              className="flex items-center gap-2 text-xs bg-emerald-50 border border-emerald-200 rounded px-2 py-1 text-emerald-900"
+              className="flex items-center justify-between gap-2 px-3 h-9 rounded-md border bg-emerald-50 border-emerald-200"
             >
-              <FileText className="h-3 w-3 shrink-0" />
-              <span className="truncate font-medium">{f.name}</span>
-            </li>
+              <span className="flex items-center gap-2 truncate text-xs text-emerald-900">
+                <FileText className="h-3 w-3 shrink-0" />
+                <span className="truncate font-medium">{f.name}</span>
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!f.public_url && !f.url}
+                onClick={() => {
+                  const u = f.public_url || f.url;
+                  if (u) window.open(u, "_blank");
+                }}
+                className="h-7 px-2 text-[11px] gap-1 shrink-0"
+              >
+                <ExternalLink className="h-3 w-3" /> View
+              </Button>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
     </section>
   );
@@ -448,11 +476,15 @@ function OptionalFaxCard({
   patient,
   sending,
   onSend,
+  mnRequestLetterCount,
 }: {
   patient: Patient;
   sending: boolean;
   onSend: () => void;
+  mnRequestLetterCount: number;
 }) {
+  const hasLetter = mnRequestLetterCount > 0;
+  const disabled = sending || !patient.doctorFax || !hasLetter;
   return (
     <section className="rounded-xl border border-dashed bg-muted/20 border-l-4 border-l-indigo-300 p-4 flex items-center justify-between gap-3 flex-wrap">
       <div className="min-w-0">
@@ -460,7 +492,7 @@ function OptionalFaxCard({
           Optional — Also send by Fax
         </p>
         <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-          Generates the MN Request PDF and dispatches via Supermail in addition to Parachute.
+          Triggers Monday to dispatch the files above via Supermail, in addition to Parachute.
         </p>
         {patient.doctorFax ? (
           <p className="text-xs font-mono text-foreground/80 mt-1">
@@ -471,12 +503,17 @@ function OptionalFaxCard({
             (no doctor fax on file)
           </p>
         )}
+        {!hasLetter && patient.doctorFax && (
+          <p className="text-xs text-rose-700 mt-1">
+            Generate the MN Request Letter above first.
+          </p>
+        )}
       </div>
       <Button
         variant="outline"
         size="sm"
         onClick={onSend}
-        disabled={sending || !patient.doctorFax}
+        disabled={disabled}
         className="gap-2"
       >
         {sending ? (
@@ -851,59 +888,69 @@ function ScriptViewer({
 }
 
 function RequestLetterCard({
-  patient,
+  files,
+  loading,
+  generating,
+  onGenerate,
+  onDelete,
   grouped,
 }: {
-  patient: Patient;
+  files: MondayFileEntry[];
+  loading: boolean;
+  generating: boolean;
+  onGenerate: () => void | Promise<void>;
+  onDelete: () => void | Promise<void>;
   grouped?: boolean;
 }) {
-  const [busy, setBusy] = useState(false);
-
-  const openPreview = async () => {
-    setBusy(true);
-    try {
-      const bytes = await generateMnRequestPdf(patient);
-      previewMnRequestPdf(bytes);
-    } catch (e) {
-      toast.error("PDF preview failed", {
-        description: e instanceof Error ? e.message : String(e),
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  const hasLetter = files.length > 0;
   return (
     <section
       className={`rounded-xl bg-card border shadow-card p-5 space-y-3 ${
         grouped ? "border-l-4 border-l-indigo-300" : ""
       }`}
     >
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            MN Request Letter
-          </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              MN Request Letter
+            </p>
+            <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200">
+              Required
+            </span>
+          </div>
           <p className="text-[11px] text-muted-foreground/80 mt-0.5">
             Generated from the data above — patient name, situation, and check marks
-            are filled in automatically.
+            are filled in automatically. Uploads to Monday so it&apos;s attached when
+            you send the request.
           </p>
         </div>
         <Button
-          variant="outline"
           size="sm"
-          onClick={openPreview}
-          disabled={busy}
-          className="h-8 gap-1 text-xs"
+          onClick={onGenerate}
+          disabled={generating}
+          className="h-8 gap-1 text-xs bg-teal-600 hover:bg-teal-700 text-white"
         >
-          {busy ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
+          {generating ? (
+            <>
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Generating…
+            </>
           ) : (
-            <ExternalLink className="h-3 w-3" />
+            <>
+              <FileText className="h-3 w-3" />
+              {hasLetter ? "Regenerate" : "Generate"}
+            </>
           )}
-          Preview
         </Button>
       </div>
+
+      <ScriptViewer
+        label="MN Request Letter"
+        files={files}
+        loading={loading}
+        onDelete={onDelete}
+      />
     </section>
   );
 }
@@ -938,18 +985,27 @@ function daysSince(iso?: string): number | null {
 
 const PARACHUTE_URL = "https://dme.parachutehealth.com/u/r/BGP3-YIEG1-Z8-SL/dashboard";
 
+interface Attachment {
+  label: string;
+  count: number;
+  /** When true, the file MUST be present before Send is enabled. */
+  required?: boolean;
+}
+
 function SendActionCard({
   patient,
   sending,
   completing,
   onSend,
   onMarkComplete,
+  attachments,
 }: {
   patient: Patient;
   sending: boolean;
   completing: boolean;
   onSend: () => void;
   onMarkComplete: () => void;
+  attachments: Attachment[];
 }) {
   const method = patient.clinicalsMethod ?? "Fax";
   const alreadySent = !!patient.requestSentAt;
@@ -964,6 +1020,13 @@ function SendActionCard({
       : method === "Email" && patient.doctorEmail
         ? patient.doctorEmail
         : null;
+
+  // Send is gated on every required attachment being present (today
+  // that's just the MN Request Letter). Optional attachments may be 0.
+  const allRequiredPresent = attachments.every(
+    (a) => !a.required || a.count > 0,
+  );
+  const mnRequestLetterPresent = allRequiredPresent;
 
   return (
     <section className="rounded-xl bg-card border shadow-card overflow-hidden">
@@ -1002,6 +1065,8 @@ function SendActionCard({
       {/* Two numbered step subsections — same visual pattern as the
          Insurance Panel Step 1/2/3 layout, so the eye reads top→bottom. */}
       <div className="px-6 py-5 space-y-4">
+        {isFaxOrEmail && <AttachmentSummary attachments={attachments} />}
+
         <StepBlock
           number={1}
           title="Send the request"
@@ -1009,7 +1074,7 @@ function SendActionCard({
             isParachute
               ? "Open the Parachute portal in a new tab and submit the request there."
               : recipient
-                ? `Dispatches the MN Request PDF to ${recipient} via Supermail.`
+                ? `Dispatches the files above to ${recipient} via Supermail.`
                 : method === "Fax"
                   ? "(no doctor fax on file)"
                   : method === "Email"
@@ -1020,7 +1085,7 @@ function SendActionCard({
           {isFaxOrEmail ? (
             <Button
               onClick={onSend}
-              disabled={sending}
+              disabled={sending || !mnRequestLetterPresent}
               className="gap-2 bg-teal-600 hover:bg-teal-700 text-white"
             >
               {sending ? (
@@ -1106,6 +1171,48 @@ function StepBlock({
           <div>{children}</div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function AttachmentSummary({ attachments }: { attachments: Attachment[] }) {
+  // Tells Samantha exactly what Monday's automation will attach when she
+  // hits Send — pulled live from the file columns shown above. Required
+  // rows missing a file render in red so the gating reason is obvious.
+  return (
+    <div className="rounded-lg border bg-muted/30 px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Will attach when sent
+      </p>
+      <ul className="mt-1.5 space-y-0.5">
+        {attachments.map((a) => {
+          const blocked = a.required && a.count === 0;
+          return (
+            <li
+              key={a.label}
+              className={`flex items-center gap-2 text-xs ${
+                blocked ? "text-rose-700" : "text-foreground"
+              }`}
+            >
+              {blocked ? (
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+              ) : a.count > 0 ? (
+                <Check className="h-3 w-3 shrink-0 text-emerald-600" />
+              ) : (
+                <span className="h-3 w-3 shrink-0 rounded-full border border-muted-foreground/40" />
+              )}
+              <span className="font-medium">{a.label}</span>
+              <span className="text-muted-foreground">
+                {a.count > 0
+                  ? `· ${a.count} file${a.count === 1 ? "" : "s"}`
+                  : a.required
+                    ? "· required, missing"
+                    : "· none"}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
