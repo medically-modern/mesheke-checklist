@@ -11,6 +11,7 @@ import {
   COL,
   clearStatusColumn,
   hasToken,
+  uploadFileToColumn,
   writeDate,
   writeStatusIndex,
   writeStatusLabel,
@@ -137,8 +138,36 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
       return;
     }
     setSending(true);
+    const method = patient.clinicalsMethod;
+    const isFaxOrEmail = method === "Fax" || method === "Email";
     const today = new Date().toISOString().slice(0, 10);
+
+    // For Fax / Email: build the PDF, upload it to the MN Request Letter
+    // column, then flip the Send Request status — that's what triggers the
+    // Supermail automation that emails the doctor (or the @rcfax address).
+    const pdfTasks: { label: string; run: () => Promise<unknown> }[] = [];
+    if (isFaxOrEmail) {
+      pdfTasks.push({
+        label: "Generate & upload MN Request PDF",
+        run: async () => {
+          const bytes = await generateMnRequestPdf(patient);
+          const safeName = patient.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+          await uploadFileToColumn(
+            patient.id,
+            COL.mnRequestLetter,
+            bytes,
+            `MN_Request_${safeName}.pdf`,
+          );
+        },
+      });
+      pdfTasks.push({
+        label: "Send Request trigger",
+        run: () => writeStatusLabel(patient.id, COL.sendRequestTrigger, "Send"),
+      });
+    }
+
     const tasks: { label: string; run: () => Promise<unknown> }[] = [
+      ...pdfTasks,
       {
         label: "Request Sent At",
         run: () => writeDate(patient.id, COL.requestSentAt, today),
@@ -152,18 +181,24 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
     const failures: string[] = [];
     results.forEach((r, i) => {
       if (r.status === "rejected") {
-        failures.push(`${tasks[i].label}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
+        failures.push(
+          `${tasks[i].label}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`,
+        );
       }
     });
     setSending(false);
     if (failures.length === 0) {
-      toast.success("Request marked as sent — Monday will route to next stage");
+      toast.success(
+        isFaxOrEmail
+          ? `Request sent — ${method === "Fax" ? "fax" : "email"} dispatched via Supermail`
+          : "Request marked as sent — Monday will route to next stage",
+      );
     } else {
       toast.error(`${failures.length} write(s) failed`, {
         description: failures.slice(0, 3).join("\n"),
       });
     }
-  }, [patient.id]);
+  }, [patient]);
 
   const cgmIsGenerating = cgmIsGeneratingLocal || mondayFiles.generateCgmStatus === "Generate";
   const ipIsGenerating = ipIsGeneratingLocal || mondayFiles.generateIpStatus === "Generate";
@@ -801,12 +836,22 @@ function SendActionCard({
           {sending ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              {isParachute ? "Opening Parachute…" : "Marking Sent…"}
+              {isParachute ? "Opening Parachute…" : `Sending…`}
             </>
           ) : isParachute ? (
             <>
               <ExternalLink className="h-4 w-4" />
               Send via Parachute
+            </>
+          ) : method === "Fax" ? (
+            <>
+              <Send className="h-4 w-4" />
+              Send via Fax
+            </>
+          ) : method === "Email" ? (
+            <>
+              <Send className="h-4 w-4" />
+              Send via Email
             </>
           ) : (
             <>

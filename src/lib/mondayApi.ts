@@ -76,6 +76,10 @@ export const COL = {
   generateIpScript: "color_mm1w4wd8",
   ipTemplate: "file_mm1wft5h",
 
+  // Send Request → Supermail
+  mnRequestLetter: "file_mm2yydbc",
+  sendRequestTrigger: "color_mm2y7t2x",
+
   // Confirm Receipt / Chase
   confirmChaseNotes: "text_mm1wssm8",
   confirmReceiptNotes: "text_mm1wbe5y",
@@ -313,6 +317,42 @@ export interface MondayFileEntry {
 }
 
 export type ColumnFiles = Record<string, MondayFileEntry[]>;
+
+/** Upload a file (PDF, image, etc.) into a Monday file column. */
+export async function uploadFileToColumn(
+  itemId: string,
+  columnId: string,
+  bytes: Uint8Array,
+  filename: string,
+  mimeType = "application/pdf",
+): Promise<void> {
+  const token = getToken();
+  if (!token) throw new Error("VITE_MONDAY_API_TOKEN is not set");
+
+  const query = `mutation ($file: File!) { add_file_to_column(item_id: ${itemId}, column_id: "${columnId}", file: $file) { id } }`;
+
+  const fd = new FormData();
+  fd.append("query", query);
+  fd.append("variables[file]", new Blob([bytes as BlobPart], { type: mimeType }), filename);
+
+  const res = await fetch(`${MONDAY_API_URL}/file`, {
+    method: "POST",
+    headers: {
+      Authorization: token,
+      "API-Version": MONDAY_API_VERSION,
+      // NOTE: don't set Content-Type — browser sets multipart boundary
+    },
+    body: fd,
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`File upload failed (${res.status}): ${txt}`);
+  }
+  const json = await res.json();
+  if (json.errors) {
+    throw new Error(`Monday file upload error: ${JSON.stringify(json.errors)}`);
+  }
+}
 
 /** Removes ALL files from a single file column on a single item. */
 export async function deleteFileFromColumn(
