@@ -396,9 +396,27 @@ export async function generateMnRequestPdf(patient: Patient): Promise<Uint8Array
 
   if (cgm) drawBlock(ctx, cgm, allReasons);
   if (ip) drawBlock(ctx, ip, allReasons);
-  if (!cgm && !ip) {
+
+  // Fallback block: if neither specific block applied, list the outstanding
+  // reasons directly so the doctor sees what's still needed.
+  if (!cgm && !ip && allReasons.length > 0) {
+    drawBlock(
+      ctx,
+      {
+        title: "Outstanding Items",
+        situation: "Items still needed for medical necessity approval",
+        requirements: allReasons.map((r) => ({
+          name: r,
+          example: "",
+          reasonKeys: [r],
+        })),
+      },
+      allReasons,
+    );
+  }
+  if (!cgm && !ip && allReasons.length === 0) {
     ctx.page.drawText(
-      "(No coverage paths require an MN request — patient is on Supplies Only or Not Serving.)",
+      "(No outstanding items — medical necessity is established.)",
       { x: 50, y: ctx.y, size: 11, font, color: LIGHT },
     );
   }

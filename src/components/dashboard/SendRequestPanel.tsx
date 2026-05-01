@@ -6,7 +6,6 @@ import {
 } from "react";
 import type { Patient } from "@/lib/workflow";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { useMondayFiles } from "@/hooks/useMondayFiles";
 import {
   COL,
@@ -15,7 +14,6 @@ import {
   writeDate,
   writeStatusIndex,
   writeStatusLabel,
-  writeText,
   type MondayFileEntry,
 } from "@/lib/mondayApi";
 import { GEN_SCRIPT_STATUS } from "@/lib/mondayMapping";
@@ -144,10 +142,6 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
         run: () => writeDate(patient.id, COL.requestSentAt, today),
       },
       {
-        label: "Confirming & Chasing Clinicals Notes",
-        run: () => writeText(patient.id, COL.confirmChaseNotes, state.confirmChaseNotes ?? ""),
-      },
-      {
         label: "Advancer 2B",
         run: () => writeStatusLabel(patient.id, COL.advancer2b, "Complete"),
       },
@@ -167,7 +161,7 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
         description: failures.slice(0, 3).join("\n"),
       });
     }
-  }, [patient.id, state.confirmChaseNotes]);
+  }, [patient.id]);
 
   const cgmIsGenerating = cgmIsGeneratingLocal || mondayFiles.generateCgmStatus === "Generate";
   const ipIsGenerating = ipIsGeneratingLocal || mondayFiles.generateIpStatus === "Generate";
@@ -175,30 +169,54 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
   const showCgmGenerate = patient.serving === "CGM" || patient.serving === "Insulin Pump + CGM" || patient.serving === "Supplies + CGM";
   const showIpGenerate = patient.serving !== "CGM";
 
+  const isParachute = patient.clinicalsMethod === "Parachute";
+  const [showAdvanced, setShowAdvanced] = useState(!isParachute);
+
+  // Reset reveal state when method changes
+  useEffect(() => {
+    setShowAdvanced(!isParachute);
+  }, [isParachute]);
+
   return (
     <div className="space-y-4">
+      <MethodBanner patient={patient} />
+
       <WhatsNeededCard patient={patient} />
 
-      <GenerateScriptsCard
-        showCgm={showCgmGenerate}
-        showIp={showIpGenerate}
-        cgmIsGenerating={cgmIsGenerating}
-        ipIsGenerating={ipIsGenerating}
-        cgmFiles={mondayFiles.cgmTemplate}
-        ipFiles={mondayFiles.ipTemplate}
-        loading={mondayFiles.loading}
-        onGenerateCgm={() => handleGenerateCgm("Generate")}
-        onCancelCgm={() => handleGenerateCgm(undefined)}
-        onGenerateIp={() => handleGenerateIp("Generate")}
-        onCancelIp={() => handleGenerateIp(undefined)}
-      />
+      {isParachute && !showAdvanced ? (
+        <ParachuteCollapsedNotice onShow={() => setShowAdvanced(true)} />
+      ) : (
+        <>
+          <GenerateScriptsCard
+            showCgm={showCgmGenerate}
+            showIp={showIpGenerate}
+            cgmIsGenerating={cgmIsGenerating}
+            ipIsGenerating={ipIsGenerating}
+            cgmFiles={mondayFiles.cgmTemplate}
+            ipFiles={mondayFiles.ipTemplate}
+            loading={mondayFiles.loading}
+            onGenerateCgm={() => handleGenerateCgm("Generate")}
+            onCancelCgm={() => handleGenerateCgm(undefined)}
+            onGenerateIp={() => handleGenerateIp("Generate")}
+            onCancelIp={() => handleGenerateIp(undefined)}
+          />
 
-      <RequestLetterCard patient={patient} />
+          <RequestLetterCard patient={patient} />
 
-      <ChasingNotesCard
-        value={state.confirmChaseNotes ?? ""}
-        onChange={(v) => update("confirmChaseNotes", v)}
-      />
+          {isParachute && (
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAdvanced(false)}
+                className="text-xs text-muted-foreground"
+              >
+                Hide for Parachute
+              </Button>
+            </div>
+          )}
+        </>
+      )}
 
       <SendActionCard
         patient={patient}
@@ -212,6 +230,60 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
 // =====================================================================
 // Sub-cards
 // =====================================================================
+
+function MethodBanner({ patient }: { patient: Patient }) {
+  const method = patient.clinicalsMethod ?? "—";
+  const config: Record<string, { className: string; hint: string }> = {
+    Fax: {
+      className: "bg-sky-100 text-sky-900 border-sky-300",
+      hint: patient.doctorFax ? `→ ${patient.doctorFax}` : "(no doctor fax on file)",
+    },
+    Parachute: {
+      className: "bg-indigo-100 text-indigo-900 border-indigo-300",
+      hint: "→ submit via Parachute portal — scripts and request letter handled there",
+    },
+    Email: {
+      className: "bg-teal-100 text-teal-900 border-teal-300",
+      hint: patient.doctorEmail ? `→ ${patient.doctorEmail}` : "(no doctor email on file)",
+    },
+  };
+  const c = config[method] ?? { className: "bg-muted text-muted-foreground border-muted", hint: "" };
+
+  return (
+    <section
+      className={`rounded-xl border-2 shadow-card px-5 py-4 flex items-center gap-3 flex-wrap ${c.className}`}
+    >
+      <Send className="h-5 w-5 shrink-0" />
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wider opacity-70">Clinicals Method</p>
+        <p className="text-lg font-semibold leading-tight">{method}</p>
+      </div>
+      <span className="text-xs opacity-80 ml-auto truncate">{c.hint}</span>
+    </section>
+  );
+}
+
+function ParachuteCollapsedNotice({ onShow }: { onShow: () => void }) {
+  return (
+    <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
+      <div>
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">
+          Generate Scripts &amp; MN Request Letter
+        </p>
+        <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+          Hidden — this patient&apos;s clinicals method is Parachute, so scripts and
+          the request letter are handled inside the Parachute portal.
+        </p>
+      </div>
+      <div>
+        <Button variant="outline" size="sm" onClick={onShow} className="text-xs gap-1">
+          <ExternalLink className="h-3 w-3" />
+          Show anyway (for fax/email submission)
+        </Button>
+      </div>
+    </section>
+  );
+}
 
 function WhatsNeededCard({ patient }: { patient: Patient }) {
   const established = patient.medicalNecessity === "Established";
@@ -453,9 +525,21 @@ function ScriptViewer({
 function RequestLetterCard({ patient }: { patient: Patient }) {
   const [busy, setBusy] = useState<"preview" | "download" | null>(null);
 
-  const hasContent =
-    (patient.cgmCoveragePath === "Insulin" || patient.cgmCoveragePath === "Hypo") ||
-    (patient.ipCoveragePath && patient.ipCoveragePath !== "Not Serving" && patient.ipCoveragePath !== "Supplies Only");
+  const established = patient.medicalNecessity === "Established";
+
+  // List the blocks that will appear in the generated PDF based on coverage
+  // paths and outstanding reasons.
+  const willInclude: string[] = [];
+  if (patient.cgmCoveragePath === "Insulin") willInclude.push("CGM — Insulin");
+  else if (patient.cgmCoveragePath === "Hypo") willInclude.push("CGM — Hypoglycemia");
+  if (patient.ipCoveragePath === "1st Pump >6M Diagnosed") willInclude.push("First Time Pump (>6 mo)");
+  else if (patient.ipCoveragePath === "1st Pump <6M Diagnosed") willInclude.push("First Time Pump (<6 mo) + LMN");
+  else if (patient.ipCoveragePath === "OOW Pump") willInclude.push("OOW Pump replacement");
+  else if (patient.ipCoveragePath === "Omnipod Switch") willInclude.push("Omnipod Switch");
+  else if (patient.ipCoveragePath === "IW New Insurance") willInclude.push("Continuation on new insurance");
+  if (willInclude.length === 0 && !established) {
+    willInclude.push("Outstanding items (from MN Invalid Reasons)");
+  }
 
   const generateAnd = async (mode: "preview" | "download") => {
     setBusy(mode);
@@ -485,86 +569,55 @@ function RequestLetterCard({ patient }: { patient: Patient }) {
         </p>
       </div>
 
-      {!hasContent ? (
-        <div className="rounded-md border border-dashed bg-muted/20 p-4 text-xs text-muted-foreground">
-          No request letter needed (Coverage Paths are Supplies Only / Not Serving).
+      {established && willInclude.length === 0 ? (
+        <div className="rounded-md border border-dashed bg-emerald-50 border-emerald-200 p-4 text-xs text-emerald-900">
+          Medical Necessity is Established — no request letter needed. (You can still generate one if you want a paper trail.)
         </div>
-      ) : (
-        <div className="rounded-md border bg-muted/20 px-3 py-3 space-y-2">
-          <div className="text-xs">
-            <p className="font-medium">Will include:</p>
-            <ul className="list-disc list-inside text-muted-foreground mt-1 space-y-0.5">
-              {patient.cgmCoveragePath === "Insulin" && <li>CGM — Insulin block</li>}
-              {patient.cgmCoveragePath === "Hypo" && <li>CGM — Hypoglycemia block</li>}
-              {patient.ipCoveragePath === "1st Pump >6M Diagnosed" && <li>First Time Pump (&gt;6 mo)</li>}
-              {patient.ipCoveragePath === "1st Pump <6M Diagnosed" && <li>First Time Pump (&lt;6 mo) + LMN</li>}
-              {patient.ipCoveragePath === "OOW Pump" && <li>OOW Pump replacement</li>}
-              {patient.ipCoveragePath === "Omnipod Switch" && <li>Omnipod Switch</li>}
-              {patient.ipCoveragePath === "IW New Insurance" && <li>Continuation on new insurance</li>}
-            </ul>
-          </div>
-          <div className="flex items-center gap-2 justify-end pt-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => generateAnd("preview")}
-              disabled={busy !== null}
-              className="h-8 gap-1 text-xs"
-            >
-              {busy === "preview" ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <ExternalLink className="h-3 w-3" />
-              )}
-              Preview
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => generateAnd("download")}
-              disabled={busy !== null}
-              className="h-8 gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              {busy === "download" ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Download className="h-3 w-3" />
-              )}
-              Generate &amp; Download
-            </Button>
-          </div>
+      ) : null}
+
+      <div className="rounded-md border bg-muted/20 px-3 py-3 space-y-2">
+        <div className="text-xs">
+          <p className="font-medium">Will include:</p>
+          <ul className="list-disc list-inside text-muted-foreground mt-1 space-y-0.5">
+            {willInclude.map((b) => (
+              <li key={b}>{b}</li>
+            ))}
+          </ul>
         </div>
-      )}
+        <div className="flex items-center gap-2 justify-end pt-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => generateAnd("preview")}
+            disabled={busy !== null}
+            className="h-8 gap-1 text-xs"
+          >
+            {busy === "preview" ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <ExternalLink className="h-3 w-3" />
+            )}
+            Preview
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => generateAnd("download")}
+            disabled={busy !== null}
+            className="h-8 gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            {busy === "download" ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Download className="h-3 w-3" />
+            )}
+            Generate &amp; Download
+          </Button>
+        </div>
+      </div>
     </section>
   );
 }
 
-function ChasingNotesCard({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
-      <div>
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">
-          Confirming &amp; Chasing Clinicals Notes
-        </p>
-        <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-          Notes about who you contacted, what you sent, and any callbacks.
-          Saved to Monday on Mark Request Sent.
-        </p>
-      </div>
-      <Textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="e.g. Faxed to Dr Smith — confirmed receipt with Tasha at 3pm..."
-        className="min-h-[100px] text-sm"
-      />
-    </section>
-  );
-}
 
 function formatDate(iso?: string): string | null {
   if (!iso) return null;
