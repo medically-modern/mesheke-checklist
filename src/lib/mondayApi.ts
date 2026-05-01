@@ -335,11 +335,15 @@ export async function uploadFileToColumn(
   fd.append("query", query);
   fd.append("variables[file]", new Blob([bytes as BlobPart], { type: mimeType }), filename);
 
-  // Send only the Authorization header. Adding API-Version triggers a CORS
-  // preflight that Monday's file endpoint occasionally blocks.
+  // Monday's /v2/file endpoint doesn't return CORS headers, so we relay
+  // through our Cloudflare Worker (worker/src/index.js).
+  const proxyUrl =
+    (import.meta.env.VITE_MONDAY_FILE_PROXY_URL as string | undefined) ||
+    "https://monday-file-proxy.medicallymodern.workers.dev";
+
   let res: Response;
   try {
-    res = await fetch(`${MONDAY_API_URL}/file`, {
+    res = await fetch(proxyUrl, {
       method: "POST",
       headers: { Authorization: token },
       body: fd,
