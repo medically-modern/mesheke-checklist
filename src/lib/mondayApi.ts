@@ -275,6 +275,21 @@ export async function writeDate(itemId: string, columnId: string, dateStr: strin
   await gql(`mutation { change_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${JSON.stringify(value)}) { id } }`);
 }
 
+/** Write a Monday date column with both date AND time (UTC). */
+export async function writeDateTime(
+  itemId: string,
+  columnId: string,
+  date: Date = new Date(),
+): Promise<void> {
+  const iso = date.toISOString(); // 2026-04-30T14:30:00.000Z
+  const [datePart, timePartFull] = iso.split("T");
+  const time = timePartFull.slice(0, 8); // 14:30:00
+  const value = JSON.stringify({ date: datePart, time });
+  await gql(
+    `mutation { change_column_value(item_id: ${itemId}, board_id: ${BOARD_ID}, column_id: "${columnId}", value: ${JSON.stringify(value)}) { id } }`,
+  );
+}
+
 // ---- File asset helpers ----
 
 export interface MondayAsset {

@@ -12,7 +12,7 @@ import {
   clearStatusColumn,
   hasToken,
   uploadFileToColumn,
-  writeDate,
+  writeDateTime,
   writeStatusIndex,
   writeStatusLabel,
   type MondayFileEntry,
@@ -141,7 +141,6 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
     }
     const method = patient.clinicalsMethod ?? "Fax";
     setSending(true);
-    const today = new Date().toISOString().slice(0, 10);
     try {
       let bytes: Uint8Array;
       try {
@@ -166,7 +165,7 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
         throw new Error(`[3/4 trigger Send Request] ${e instanceof Error ? e.message : String(e)}`);
       }
       try {
-        await writeDate(patient.id, COL.requestSentAt, today);
+        await writeDateTime(patient.id, COL.requestSentAt);
       } catch (e) {
         throw new Error(`[4/4 Request Sent At] ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -192,7 +191,6 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
       return;
     }
     setCompleting(true);
-    const today = new Date().toISOString().slice(0, 10);
     const isParachute = patient.clinicalsMethod === "Parachute";
     // Parachute skips Confirm Receipt (rep handles receipt-confirmation in the
     // Parachute portal directly), so we route straight to Chase Clinicals.
@@ -200,7 +198,7 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
     const tasks: { label: string; run: () => Promise<unknown> }[] = [
       {
         label: "Request Sent At",
-        run: () => writeDate(patient.id, COL.requestSentAt, today),
+        run: () => writeDateTime(patient.id, COL.requestSentAt),
       },
       {
         label: `Stage Advancer → ${nextStage}`,
@@ -816,9 +814,21 @@ function RequestLetterCard({ patient }: { patient: Patient }) {
 
 function formatDate(iso?: string): string | null {
   if (!iso) return null;
-  const d = new Date(iso);
+  // Monday's text for a date+time column comes back like "2026-05-01 14:30:00 UTC"
+  // — strip a trailing " UTC" so Date can parse the ISO-ish string.
+  const cleaned = iso.replace(/\s+UTC$/, "Z").replace(" ", "T");
+  const d = new Date(cleaned);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  // Always render in Eastern Time and tag the suffix so the rep sees the tz.
+  const formatted = d.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${formatted} ET`;
 }
 
 function daysSince(iso?: string): number | null {
