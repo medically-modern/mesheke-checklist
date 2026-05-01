@@ -924,7 +924,7 @@ function SendActionCard({
             <Button
               onClick={onSend}
               disabled={sending}
-              className="gap-2 bg-slate-900 hover:bg-slate-800 text-white"
+              className="gap-2 bg-teal-600 hover:bg-teal-700 text-white"
             >
               {sending ? (
                 <>
@@ -943,7 +943,7 @@ function SendActionCard({
               href={PARACHUTE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium transition-colors"
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium transition-colors"
             >
               <ExternalLink className="h-4 w-4" />
               Open Parachute Portal
