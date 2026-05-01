@@ -88,6 +88,38 @@ export function clearEvalState(patientId: string): void {
   localStorage.removeItem(STORAGE_PREFIX + patientId);
 }
 
+/**
+ * Build an EvalState from the patient's current Monday columns. Used as the
+ * initial form state when nothing is in localStorage, and after Reset.
+ */
+export function seedEvalStateFromPatient(patient: Patient): EvalState {
+  const seed: EvalState = {};
+  // IP / CGM Coverage Path — only seed if Monday has a non-"Not Serving" value
+  // since "Not Serving" is auto-derived from Serving on send and isn't a path
+  // the rep can pick from the dropdown.
+  if (patient.ipCoveragePath && patient.ipCoveragePath !== "Not Serving") {
+    seed.ipCoveragePath = patient.ipCoveragePath as EvalState["ipCoveragePath"];
+  }
+  if (patient.cgmCoveragePath && patient.cgmCoveragePath !== "Not Serving") {
+    if (
+      patient.cgmCoveragePath === "Insulin" ||
+      patient.cgmCoveragePath === "Hypo" ||
+      patient.cgmCoveragePath === "Invalid"
+    ) {
+      seed.cgmCoveragePath = patient.cgmCoveragePath;
+    }
+  }
+  if (patient.diagnosis && patient.diagnosis !== "Evaluate") {
+    seed.diagnosis = patient.diagnosis;
+  }
+  // MRs / Clinicals → Yes/No
+  if (patient.mrsClinicals === "MR Received") seed.mrReceived = "Yes";
+  else if (patient.mrsClinicals === "Collect") seed.mrReceived = "No";
+  if (patient.lastVisit) seed.lastVisitDate = patient.lastVisit;
+  if (patient.mnEvalNotes) seed.notes = patient.mnEvalNotes;
+  return seed;
+}
+
 // ---- OOW Date validity ----
 
 const FOUR_YEARS_DAYS = 4 * 365.25;

@@ -38,7 +38,7 @@ import {
 import {
   loadEvalState,
   saveEvalState,
-  clearEvalState,
+  seedEvalStateFromPatient,
   isOowDateValid,
   getMrExpiry,
   deriveValidity,
@@ -72,7 +72,6 @@ import {
   Upload,
   FileText,
   Trash2,
-  RotateCcw,
   ChevronsUpDown,
   AlertTriangle,
   Download,
@@ -83,6 +82,8 @@ import {
 
 interface Props {
   patient: Patient;
+  /** Bumped by parent when Reset is pressed — forces local state to reload. */
+  resetVersion?: number;
 }
 
 // Compute "today + N months" — used for MR Expiry Date
@@ -100,13 +101,22 @@ function formatDate(iso?: string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-export function EvaluatePanel({ patient }: Props) {
-  const [state, setState] = useState<EvalState>(() => loadEvalState(patient.id));
+export function EvaluatePanel({ patient, resetVersion = 0 }: Props) {
+  const [state, setState] = useState<EvalState>(() => {
+    const stored = loadEvalState(patient.id);
+    return Object.keys(stored).length > 0 ? stored : seedEvalStateFromPatient(patient);
+  });
 
-  // Reload state when patient changes
+  // Reload state when patient changes OR when parent triggers a Reset.
   useEffect(() => {
-    setState(loadEvalState(patient.id));
-  }, [patient.id]);
+    const stored = loadEvalState(patient.id);
+    if (Object.keys(stored).length > 0) setState(stored);
+    else setState(seedEvalStateFromPatient(patient));
+    // Re-run when patient.id changes or resetVersion bumps. We intentionally
+    // don't depend on `patient` (the whole object) since useMondayPatients
+    // creates a new reference on every poll which would re-seed unnecessarily.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient.id, resetVersion]);
 
   // Persist on every change
   useEffect(() => {
@@ -129,11 +139,6 @@ export function EvaluatePanel({ patient }: Props) {
   const update = useCallback(<K extends keyof EvalState>(key: K, value: EvalState[K]) => {
     setState((s) => ({ ...s, [key]: value }));
   }, []);
-
-  const clearLocalState = () => {
-    clearEvalState(patient.id);
-    setState({});
-  };
 
   // Poll Monday's file columns every 2s while a Generate is in flight. Silent
   // (no loading flicker) after the initial fetch. Declared early so the
@@ -522,7 +527,6 @@ export function EvaluatePanel({ patient }: Props) {
       <ValiditySummary
         validity={validity}
         preview={preview}
-        onClearLocal={clearLocalState}
         onSendToMonday={handleSendToMonday}
         sending={sending}
       />
@@ -1121,7 +1125,6 @@ function FileUploadCard({
 interface ValiditySummaryProps {
   validity: ReturnType<typeof deriveValidity>;
   preview: ReturnType<typeof buildMondayPreview>;
-  onClearLocal: () => void;
   onSendToMonday: () => void;
   sending: boolean;
 }
@@ -1129,29 +1132,18 @@ interface ValiditySummaryProps {
 function ValiditySummary({
   validity,
   preview,
-  onClearLocal,
   onSendToMonday,
   sending,
 }: ValiditySummaryProps) {
   return (
     <section className="rounded-xl bg-card border shadow-card p-5 space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            Monday Preview
-          </p>
-          <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-            Review the values below, then press Send to Monday.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onClearLocal}
-          className="gap-1 text-xs"
-        >
-          <RotateCcw className="h-3 w-3" /> Clear local
-        </Button>
+      <div>
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">
+          Monday Preview
+        </p>
+        <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+          Review the values below, then press Send to Monday.
+        </p>
       </div>
 
       {/* Section pills + MN status */}

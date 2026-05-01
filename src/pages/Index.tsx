@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { RotateCcw, Stethoscope, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { clearEvalState } from "@/lib/evalState";
 
 const TAB_LABELS: Record<TabKey, string> = {
   evaluate: "Evaluate",
@@ -23,6 +24,7 @@ const Index = () => {
   const [mainTab, setMainTab] = useState<TabKey>("evaluate");
   const { patients, loading, error, refetch, update, clearOverlay } = useMondayPatients(mainTab);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [resetVersion, setResetVersion] = useState(0);
 
   const handleMainTabChange = (tab: string) => {
     setMainTab(tab as TabKey);
@@ -45,8 +47,10 @@ const Index = () => {
 
   const resetForNewPatient = () => {
     if (!selected) return;
+    clearEvalState(selected.id);
     clearOverlay(selected.id);
-    toast.success("Cleared local edits — refetching from Monday");
+    setResetVersion((v) => v + 1);
+    toast.success("Reset — pulled fresh from Monday");
     refetch();
   };
 
@@ -116,7 +120,7 @@ const Index = () => {
                 <>
                   <TabsContent value="evaluate" className="space-y-5 mt-0">
                     <PatientProfileCard patient={selected} />
-                    <EvaluatePanel patient={selected} />
+                    <EvaluatePanel patient={selected} resetVersion={resetVersion} />
                   </TabsContent>
 
                   <TabsContent value="sendRequest" className="space-y-5 mt-0">

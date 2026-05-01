@@ -108,7 +108,7 @@ export const READ_COLUMN_IDS: string[] = [
   COL.diabetesEducation, COL.threeInjections, COL.cgmUse, COL.bloodSugarIssues,
   COL.lmn, COL.oowDate, COL.malfunction, COL.diagnosis,
   // MRs
-  COL.mrsClinicals, COL.medicalNecessity, COL.mnEvalNotes,
+  COL.mrsClinicals, COL.lastVisit, COL.mrExpiryDate, COL.medicalNecessity, COL.mnEvalNotes,
   // Scripts
   COL.generateCgmScript, COL.generateIpScript,
   // Receipt / Chase

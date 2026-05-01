@@ -88,6 +88,8 @@ export function mondayItemToPatient(item: MondayItem): Patient {
     malfunction: col(item, "color_mm1wp4e9") || undefined,
     diagnosis: col(item, "color_mm1wf7rv") || undefined,
     mrsClinicals: col(item, "color_mm1y8rv8") || undefined,
+    lastVisit: col(item, "date_mm1wb9br") || undefined,
+    mrExpiryDate: col(item, "date_mm1ymthz") || undefined,
     medicalNecessity: col(item, "color_mm1y6qrf") || undefined,
     mnEvalNotes: col(item, "long_text_mm27zjt2") || undefined,
     generateCgmScript: col(item, "color_mm1w2ey") || undefined,
