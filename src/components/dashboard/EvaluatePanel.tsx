@@ -356,6 +356,14 @@ export function EvaluatePanel({ patient, resetVersion = 0 }: Props) {
       label: "MN Evaluation Notes",
       run: () => writeLongText(patient.id, COL.mnEvalNotes, state.notes ?? ""),
     });
+    // Advance the Stage Advancer based on MN outcome:
+    //   Established     → Completed (skip Send Request entirely)
+    //   Not Established → Send Request
+    const nextStage = validity.established ? "Completed" : "Send Request";
+    tasks.push({
+      label: `Stage Advancer → ${nextStage}`,
+      run: () => writeStatusLabel(patient.id, COL.subStage, nextStage),
+    });
 
     const results = await Promise.allSettled(tasks.map((t) => t.run()));
     const failures: string[] = [];
