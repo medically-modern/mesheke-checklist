@@ -130,18 +130,16 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
     prevIpStatusRef.current = curr;
   }, [mondayFiles.generateIpStatus, update]);
 
-  // ---- Send (Fax / Email): dispatch only. No stage advancement. ----
+  // ---- Send (dispatch only — no stage advancement). Used by:
+  //      • Fax / Email primary button
+  //      • Parachute optional "also fax" button (rep wants belt-and-suspenders).
   const [sending, setSending] = useState(false);
   const handleSend = useCallback(async () => {
     if (!hasToken()) {
       toast.error("Monday token not configured");
       return;
     }
-    const method = patient.clinicalsMethod;
-    if (method !== "Fax" && method !== "Email") {
-      toast.error(`Send is only valid for Fax / Email. Method is ${method}.`);
-      return;
-    }
+    const method = patient.clinicalsMethod ?? "Fax";
     setSending(true);
     const today = new Date().toISOString().slice(0, 10);
     try {
@@ -172,7 +170,11 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
       } catch (e) {
         throw new Error(`[4/4 Request Sent At] ${e instanceof Error ? e.message : String(e)}`);
       }
-      toast.success(`Request sent — ${method === "Fax" ? "fax" : "email"} dispatched via Supermail`);
+      toast.success(
+        method === "Email"
+          ? "Request sent — email dispatched via Supermail"
+          : "Request sent — fax dispatched via Supermail",
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[Send] failed", msg);
@@ -270,7 +272,7 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
           title="Generate Scripts & MN Request Letter"
           open={showAdvanced}
           onToggle={() => setShowAdvanced((o) => !o)}
-          hint="Submitted through the Parachute portal"
+          hint="Not needed for Parachute requests. Open to view if sending request by fax as well."
         />
       )}
       {(!isParachute || showAdvanced) && (
@@ -292,6 +294,10 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
           />
 
           <RequestLetterCard patient={patient} />
+
+          {isParachute && (
+            <OptionalFaxCard sending={sending} onSend={handleSend} />
+          )}
         </>
       )}
 
@@ -402,6 +408,47 @@ function ClinicalFilesCard({
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+function OptionalFaxCard({
+  sending,
+  onSend,
+}: {
+  sending: boolean;
+  onSend: () => void;
+}) {
+  return (
+    <section className="rounded-xl border border-dashed bg-muted/20 p-4 flex items-center justify-between gap-3 flex-wrap">
+      <div className="min-w-0">
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">
+          Optional — Also send by Fax
+        </p>
+        <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+          Generates the MN Request PDF and dispatches via Supermail to the
+          doctor&apos;s @rcfax address — in addition to Parachute.
+        </p>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onSend}
+        disabled={sending}
+        className="gap-2"
+      >
+        {sending ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Sending…
+          </>
+        ) : (
+          <>
+            <Mail className="h-4 w-4" />
+            Send via Fax
+          </>
+        )}
+      </Button>
     </section>
   );
 }
@@ -810,15 +857,16 @@ function SendActionCard({
         <p className="text-xs uppercase tracking-wider text-muted-foreground">
           Send Request
         </p>
-        <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-          Once you&apos;ve faxed / submitted the request, click below to advance the stage.
-        </p>
+        {!isParachute && (
+          <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+            Once you&apos;ve faxed / submitted the request, click below to advance the stage.
+          </p>
+        )}
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <span className="text-xs text-muted-foreground">
           {method === "Fax" && (patient.doctorFax ? `→ ${patient.doctorFax}` : "(no doctor fax on file)")}
-          {method === "Parachute" && "→ Parachute portal"}
           {method === "Email" && (patient.doctorEmail ? `→ ${patient.doctorEmail}` : "(no doctor email on file)")}
         </span>
         {alreadySent && (
@@ -838,58 +886,71 @@ function SendActionCard({
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
-        {/* Left: dispatch (Fax/Email) or portal link (Parachute) */}
-        {isFaxOrEmail ? (
+      {/* Two-step action ladder. Vertical stack so it reads top→bottom and
+          doesn't imply "do one OR the other". */}
+      <div className="space-y-3 pt-2">
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
+            Step 1 — Send the request
+          </p>
+          {isFaxOrEmail ? (
+            <Button
+              variant="outline"
+              onClick={onSend}
+              disabled={sending}
+              className="gap-2 w-full sm:w-auto"
+            >
+              {sending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Sending…
+                </>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4" />
+                  Send via {method}
+                </>
+              )}
+            </Button>
+          ) : isParachute ? (
+            <a
+              href={PARACHUTE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-md border border-input bg-background hover:bg-muted/50 text-sm font-medium"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open Parachute Portal
+            </a>
+          ) : null}
+        </div>
+
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
+            Step 2 — Advance the stage
+          </p>
           <Button
-            variant="outline"
-            onClick={onSend}
-            disabled={sending}
-            className="gap-2"
+            size="lg"
+            onClick={onMarkComplete}
+            disabled={completing}
+            className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-elevate"
           >
-            {sending ? (
+            {completing ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Sending…
+                Marking…
               </>
             ) : (
               <>
-                {method === "Fax" ? <Mail className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
-                Send via {method}
+                <Check className="h-4 w-4" />
+                Mark as Complete
               </>
             )}
           </Button>
-        ) : isParachute ? (
-          <a
-            href={PARACHUTE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 h-10 px-4 rounded-md border border-input bg-background hover:bg-muted/50 text-sm font-medium"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Open Parachute Portal
-          </a>
-        ) : null}
-
-        {/* Right: Mark as Complete */}
-        <Button
-          size="lg"
-          onClick={onMarkComplete}
-          disabled={completing}
-          className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-elevate"
-        >
-          {completing ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Marking…
-            </>
-          ) : (
-            <>
-              <Check className="h-4 w-4" />
-              Mark as Complete
-            </>
-          )}
-        </Button>
+          <p className="text-[11px] text-muted-foreground mt-1.5">
+            after request has been sent
+          </p>
+        </div>
       </div>
     </section>
   );
