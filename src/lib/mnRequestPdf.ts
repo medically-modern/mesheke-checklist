@@ -1,88 +1,157 @@
 // Dynamic Medical Necessity Request PDF generator.
-// Replaces the static manually-edited templates with one that fills in patient
-// info + ✓/✗ marks based on the patient's current Monday MN Invalid Reasons.
+// Matches the Word-document styling exactly (Roboto fonts, Medically Modern
+// logo, teal title, light-gray table header, etc.). One block per situation
+// with requirement rows that fill in ✓ / ✗ from the patient's current Monday
+// MN Invalid Reasons.
 
 import {
   PDFDocument,
-  StandardFonts,
   rgb,
   type PDFFont,
+  type PDFImage,
   type PDFPage,
   type RGB,
 } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import type { Patient } from "./workflow";
 
-// Standard PDF fonts use WinAnsi encoding which can't render Unicode
-// checkmark/cross glyphs (✓ U+2713, ✗ U+2717). Draw the shapes instead.
-function drawCheck(page: PDFPage, cx: number, cy: number, color: RGB) {
-  // V-shape: down-stroke then up-stroke
-  page.drawLine({ start: { x: cx - 4, y: cy + 1 }, end: { x: cx - 1, y: cy - 3 }, thickness: 2, color });
-  page.drawLine({ start: { x: cx - 1, y: cy - 3 }, end: { x: cx + 5, y: cy + 5 }, thickness: 2, color });
-}
-function drawX(page: PDFPage, cx: number, cy: number, color: RGB) {
-  page.drawLine({ start: { x: cx - 4, y: cy - 4 }, end: { x: cx + 4, y: cy + 4 }, thickness: 2, color });
-  page.drawLine({ start: { x: cx + 4, y: cy - 4 }, end: { x: cx - 4, y: cy + 4 }, thickness: 2, color });
+// ---- Brand palette (from the Word docs) -------------------------------
+const TEAL = rgb(0x80 / 255, 0xad / 255, 0xaa / 255); // #80ADAA
+const RED = rgb(0xcc / 255, 0x00 / 255, 0x00 / 255); // #CC0000
+const GREEN = rgb(0x38 / 255, 0x76 / 255, 0x1d / 255); // #38761D
+const TEXT = rgb(0x40 / 255, 0x40 / 255, 0x40 / 255);
+const GRAY = rgb(0x66 / 255, 0x66 / 255, 0x66 / 255); // #666666
+const LIGHT = rgb(0xf3 / 255, 0xf3 / 255, 0xf3 / 255); // #F3F3F3
+const BORDER = rgb(0.78, 0.78, 0.78);
+
+// ---- Asset URLs -------------------------------------------------------
+const BASE = import.meta.env.BASE_URL;
+const ROBOTO_REGULAR_URL = `${BASE}fonts/Roboto-Regular.ttf`;
+const ROBOTO_BOLD_URL = `${BASE}fonts/Roboto-Bold.ttf`;
+const ROBOTO_ITALIC_URL = `${BASE}fonts/Roboto-Italic.ttf`;
+const LOGO_URL = `${BASE}templates/medically-modern-logo.png`;
+
+async function fetchBytes(url: string): Promise<ArrayBuffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch ${url} (${res.status})`);
+  return res.arrayBuffer();
 }
 
-interface Requirement {
+// =====================================================================
+// Template definitions (text is identical to the Word docs)
+// =====================================================================
+
+interface ReqRow {
+  /** Requirement text (column 2). */
   name: string;
-  example: string;
-  /** Reason strings (any match → ✗). */
+  /** Examples text (column 3) — supports an array for multi-line. */
+  examples?: string | string[];
+  /** Reason strings — if any of these are in the patient's reasons, mark ✗. */
   reasonKeys: string[];
-  /** If true, always render as ✗ (we always need it from the doctor). */
+  /** If true, always render ✗ regardless of reasons (i.e. always asking). */
   alwaysMissing?: boolean;
 }
 
-interface Block {
-  title: string;
+interface TemplateBlock {
   situation: string;
-  requirements: Requirement[];
+  rows: ReqRow[];
 }
 
-const TEAL = rgb(0.36, 0.66, 0.66);
-const RED = rgb(0.85, 0.18, 0.29);
-const GREEN = rgb(0.0, 0.6, 0.3);
-const TEXT = rgb(0.15, 0.15, 0.15);
-const LIGHT = rgb(0.55, 0.55, 0.55);
-const BORDER = rgb(0.8, 0.8, 0.8);
+// --- Reason key constants ----------------------------------------------
+const CGM_SCRIPT_REASONS = ["CGM Script invalid", "CGM Script missing"];
+const IP_SCRIPT_REASONS = ["Insulin Pump Script invalid", "Insulin Pump Script missing"];
+const EDU_REASONS = ["Diabetes Education invalid"];
+const INJ_REASONS = ["3+ Injections invalid"];
+const CGM_USE_REASONS = ["CGM Use invalid"];
+const BS_REASONS = ["Blood Sugar Issues invalid"];
+const LMN_REASONS = ["Letter of MN missing", "Letter of MN invalid"];
+const MAL_REASONS = ["Malfunction missing"];
 
-// =====================================================================
-// Coverage-path → Block mapping
-// =====================================================================
+// --- Pre-built rows ----------------------------------------------------
+const CGM_SCRIPT_ROW: ReqRow = {
+  name: "CGM script",
+  examples: "Signed",
+  reasonKeys: CGM_SCRIPT_REASONS,
+};
+const CGM_SCRIPT_ROW_BUNDLED: ReqRow = {
+  name: "CGM script",
+  examples: "Signed (insurance often prefers the full bundle together)",
+  reasonKeys: CGM_SCRIPT_REASONS,
+};
+const CGM_SCRIPT_ROW_NO_EXAMPLE: ReqRow = {
+  name: "CGM script",
+  reasonKeys: CGM_SCRIPT_REASONS,
+};
+const IP_SCRIPT_ROW: ReqRow = {
+  name: "Insulin Pump script",
+  examples: "Signed",
+  reasonKeys: IP_SCRIPT_REASONS,
+};
+const IP_SCRIPT_ROW_NO_EXAMPLE: ReqRow = {
+  name: "Insulin Pump script",
+  reasonKeys: IP_SCRIPT_REASONS,
+};
+const DIAGNOSIS_ROW: ReqRow = {
+  name: "Diagnosis > 6 months",
+  examples: "“Patient has been diagnosed with diabetes for 6+ months”",
+  reasonKeys: [],
+  alwaysMissing: false,
+};
+const INJ_ROW: ReqRow = {
+  name: "3+ insulin injections / day for > 6 months",
+  examples:
+    "“Patient injects insulin 3 or more times per day with frequent self-adjustments”",
+  reasonKeys: INJ_REASONS,
+};
+const EDU_ROW: ReqRow = {
+  name: "Diabetes education completed",
+  examples: "“Patient completed a comprehensive diabetes education program”",
+  reasonKeys: EDU_REASONS,
+};
+const CGM_USE_ROW: ReqRow = {
+  name: "Current CGM use",
+  examples: "“Patient uses a dexcom / freestyle libre daily”",
+  reasonKeys: CGM_USE_REASONS,
+};
+const BS_ROW: ReqRow = {
+  name: "Difficulty managing blood sugar despite treatment",
+  examples:
+    "“Patient experiences recurring hypoglycemia despite adhering to the treatment plan” or “wide fluctuations in blood glucose before mealtime despite adhering to the treatment plan”",
+  reasonKeys: BS_REASONS,
+};
+const LMN_ROW: ReqRow = {
+  name: "Letter of Medical Necessity",
+  examples:
+    "Signed LMN explaining why pump therapy is medically necessary now and why delay would be unsafe. Please reach out if you would like a draft for this patient.",
+  reasonKeys: LMN_REASONS,
+};
 
-function cgmBlock(coveragePath: string | undefined): Block | null {
-  if (coveragePath === "Insulin") {
+// --- Coverage path → block ---------------------------------------------
+
+function cgmBlock(path?: string): TemplateBlock | null {
+  if (path === "Insulin") {
     return {
-      title: "CGM Documentation",
       situation: "CGM for insulin-treated patient",
-      requirements: [
-        {
-          name: "CGM script",
-          example: "Signed",
-          reasonKeys: ["CGM Script invalid", "CGM Script missing"],
-        },
+      rows: [
+        CGM_SCRIPT_ROW,
         {
           name: "Insulin-treated",
-          example: "Insulin listed in medications section of medical records",
+          examples: "Insulin listed in medications section of medical records",
           reasonKeys: [],
           alwaysMissing: true,
         },
       ],
     };
   }
-  if (coveragePath === "Hypo") {
+  if (path === "Hypo") {
     return {
-      title: "CGM Documentation",
-      situation: "CGM for patient with hypoglycemia history",
-      requirements: [
+      situation: "CGM for patient experiencing hypoglycemia",
+      rows: [
+        CGM_SCRIPT_ROW,
         {
-          name: "CGM script",
-          example: "Signed",
-          reasonKeys: ["CGM Script invalid", "CGM Script missing"],
-        },
-        {
-          name: "Hypoglycemic events documented",
-          example: "Documented hypoglycemia within the last 6 months",
+          name: "Hypoglycemia language",
+          examples:
+            "“Patient has experienced multiple Level 2 hypoglycemic events (<54mg/dl), despite treatment adjustments”",
           reasonKeys: [],
           alwaysMissing: true,
         },
@@ -92,88 +161,94 @@ function cgmBlock(coveragePath: string | undefined): Block | null {
   return null;
 }
 
-const SCRIPT_REASONS = ["Insulin Pump Script invalid", "Insulin Pump Script missing"];
-const SCRIPT_REQ: Requirement = {
-  name: "Insulin Pump script",
-  example: "Signed",
-  reasonKeys: SCRIPT_REASONS,
-};
-const EDU_REQ: Requirement = {
-  name: "Diabetes education",
-  example: "Patient has been educated on diabetes self-management",
-  reasonKeys: ["Diabetes Education invalid"],
-};
-const INJ_REQ: Requirement = {
-  name: "3+ injections per day",
-  example: "Patient is on multiple daily injections of insulin",
-  reasonKeys: ["3+ Injections invalid"],
-};
-const CGM_USE_REQ: Requirement = {
-  name: "Currently using a CGM",
-  example: "Patient is using a CGM device",
-  reasonKeys: ["CGM Use invalid"],
-};
-const BS_REQ: Requirement = {
-  name: "Blood sugar issues documented",
-  example: "Hypoglycemic or hyperglycemic events recorded",
-  reasonKeys: ["Blood Sugar Issues invalid"],
-};
-const LMN_REQ: Requirement = {
-  name: "Letter of Medical Necessity",
-  example: "Signed LMN on file",
-  reasonKeys: ["Letter of MN missing", "Letter of MN invalid"],
-};
-const MALFUNCTION_REQ: Requirement = {
-  name: "Pump malfunction documented",
-  example: "Documented malfunction of current pump",
-  reasonKeys: ["Malfunction missing"],
-};
-const OOW_REQ: Requirement = {
-  name: "Pump out of warranty",
-  example: "Original purchase date >4 years ago (>5 years for Medicare A&B)",
-  reasonKeys: ["OOW Date missing"],
-  // The "OOW Date invalid (<X years)" string contains a number; we match by prefix
-  // in the reason check below.
-};
-
-function ipBlock(coveragePath: string | undefined): Block | null {
-  if (!coveragePath) return null;
-  switch (coveragePath) {
+function ipBlock(path?: string): TemplateBlock | null {
+  switch (path) {
     case "Supplies Only":
       return {
-        title: "Insulin Pump Supplies",
-        situation: "Refill of insulin pump supplies",
-        requirements: [SCRIPT_REQ],
+        situation: "Insulin Pump Supplies",
+        rows: [IP_SCRIPT_ROW],
       };
     case "1st Pump >6M Diagnosed":
       return {
-        title: "First Time Pump (>6 months since diagnosis)",
-        situation: "First time insulin pump user, diagnosed >6 months ago",
-        requirements: [SCRIPT_REQ, EDU_REQ, INJ_REQ, CGM_USE_REQ, BS_REQ],
+        situation: "First Time Pump User Diagnosed >6 Months Ago",
+        rows: [
+          CGM_SCRIPT_ROW_NO_EXAMPLE,
+          IP_SCRIPT_ROW_NO_EXAMPLE,
+          DIAGNOSIS_ROW,
+          INJ_ROW,
+          EDU_ROW,
+          CGM_USE_ROW,
+          BS_ROW,
+        ],
       };
     case "1st Pump <6M Diagnosed":
       return {
-        title: "First Time Pump (<6 months since diagnosis)",
-        situation: "First time insulin pump user, diagnosed <6 months ago",
-        requirements: [SCRIPT_REQ, EDU_REQ, INJ_REQ, CGM_USE_REQ, BS_REQ, LMN_REQ],
+        situation: "First Time Pump User Diagnosed <6 Months Ago",
+        rows: [
+          CGM_SCRIPT_ROW_BUNDLED,
+          IP_SCRIPT_ROW,
+          DIAGNOSIS_ROW,
+          INJ_ROW,
+          EDU_ROW,
+          CGM_USE_ROW,
+          BS_ROW,
+          LMN_ROW,
+        ],
       };
     case "OOW Pump":
       return {
-        title: "Out of Warranty Pump Replacement",
-        situation: "Replacement insulin pump (current pump out of warranty)",
-        requirements: [SCRIPT_REQ, OOW_REQ, MALFUNCTION_REQ],
+        situation: "Out-of-Warranty Pump",
+        rows: [
+          CGM_SCRIPT_ROW_BUNDLED,
+          IP_SCRIPT_ROW,
+          {
+            name: "Out-of-Warranty Date",
+            examples: "OOW date must be included on the script",
+            reasonKeys: ["OOW Date missing"],
+          },
+          {
+            name: "Non-repairable malfunction reason",
+            examples: [
+              "Non-repairable malfunction must be included on the script",
+              "“cracked/broken screen” or “battery is depleted”",
+              "AND",
+              "“Pump cannot be repaired or replaced”",
+            ],
+            reasonKeys: MAL_REASONS,
+          },
+        ],
       };
     case "Omnipod Switch":
       return {
-        title: "Omnipod Switch",
-        situation: "Switching to / from Omnipod insulin pump",
-        requirements: [SCRIPT_REQ, EDU_REQ, INJ_REQ, CGM_USE_REQ, BS_REQ, MALFUNCTION_REQ],
+        situation: "Switching from Omnipod",
+        rows: [
+          CGM_SCRIPT_ROW_NO_EXAMPLE,
+          IP_SCRIPT_ROW_NO_EXAMPLE,
+          DIAGNOSIS_ROW,
+          INJ_ROW,
+          EDU_ROW,
+          CGM_USE_ROW,
+          BS_ROW,
+          {
+            name: "Omnipod insufficient",
+            examples:
+              "“The patient’s current Omnipod system continues to malfunction despite reprogramming and manufacturer troubleshooting”",
+            reasonKeys: MAL_REASONS,
+          },
+        ],
       };
     case "IW New Insurance":
       return {
-        title: "Continuation on New Insurance",
-        situation: "Existing insulin pump user, new insurance plan",
-        requirements: [SCRIPT_REQ, EDU_REQ, INJ_REQ, CGM_USE_REQ, BS_REQ],
+        situation: "Continuation on New Insurance",
+        rows: [
+          CGM_SCRIPT_ROW_NO_EXAMPLE,
+          IP_SCRIPT_ROW_NO_EXAMPLE,
+          DIAGNOSIS_ROW,
+          INJ_ROW,
+          EDU_ROW,
+          CGM_USE_ROW,
+          BS_ROW,
+        ],
       };
     default:
       return null;
@@ -181,7 +256,7 @@ function ipBlock(coveragePath: string | undefined): Block | null {
 }
 
 // =====================================================================
-// Reason matching
+// Reason matching — whether each row is received vs missing
 // =====================================================================
 
 function splitReasons(text?: string): string[] {
@@ -192,12 +267,17 @@ function splitReasons(text?: string): string[] {
     .filter(Boolean);
 }
 
-function isReceived(req: Requirement, allReasons: string[]): boolean {
-  if (req.alwaysMissing) return false;
-  // Any reason match (exact or "OOW Date invalid (<X years)" startsWith) → not received
-  for (const reason of allReasons) {
-    if (req.reasonKeys.includes(reason)) return false;
-    if (req.name === "Pump out of warranty" && reason.startsWith("OOW Date invalid")) {
+function isReceived(row: ReqRow, allReasons: string[]): boolean {
+  if (row.alwaysMissing) return false;
+  if (row.reasonKeys.length === 0) {
+    // Row has no reason mapping (e.g. Diagnosis > 6 months) — there's no
+    // "diagnosis age" reason on the board, so default to received.
+    return true;
+  }
+  for (const r of allReasons) {
+    if (row.reasonKeys.includes(r)) return false;
+    // OOW Date can also fail with "OOW Date invalid (<X years)"
+    if (row.reasonKeys.includes("OOW Date missing") && r.startsWith("OOW Date invalid")) {
       return false;
     }
   }
@@ -205,183 +285,332 @@ function isReceived(req: Requirement, allReasons: string[]): boolean {
 }
 
 // =====================================================================
-// PDF renderer
+// Drawing primitives
 // =====================================================================
+
+interface Fonts {
+  regular: PDFFont;
+  bold: PDFFont;
+  italic: PDFFont;
+}
 
 interface DrawCtx {
   page: PDFPage;
-  font: PDFFont;
-  bold: PDFFont;
+  fonts: Fonts;
+  logo: PDFImage;
   width: number;
   height: number;
   y: number;
+  marginX: number;
+  pdfDoc: PDFDocument;
 }
 
-function newPage(pdfDoc: PDFDocument, font: PDFFont, bold: PDFFont): DrawCtx {
-  const page = pdfDoc.addPage([612, 792]); // letter
-  const { width, height } = page.getSize();
-  return { page, font, bold, width, height, y: height - 50 };
+const PAGE_W = 612; // letter
+const PAGE_H = 792;
+const MARGIN_X = 60;
+const MARGIN_Y = 60;
+
+function drawCheck(page: PDFPage, cx: number, cy: number, color: RGB) {
+  page.drawLine({ start: { x: cx - 5, y: cy + 0 }, end: { x: cx - 1, y: cy - 5 }, thickness: 2.4, color });
+  page.drawLine({ start: { x: cx - 1, y: cy - 5 }, end: { x: cx + 6, y: cy + 6 }, thickness: 2.4, color });
 }
+function drawX(page: PDFPage, cx: number, cy: number, color: RGB) {
+  page.drawLine({ start: { x: cx - 5, y: cy - 5 }, end: { x: cx + 5, y: cy + 5 }, thickness: 2.4, color });
+  page.drawLine({ start: { x: cx + 5, y: cy - 5 }, end: { x: cx - 5, y: cy + 5 }, thickness: 2.4, color });
+}
+
+// Wrap text into lines that fit width, given font and size.
+function wrapText(text: string, font: PDFFont, size: number, maxW: number): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let cur = "";
+  for (const w of words) {
+    const trial = cur ? `${cur} ${w}` : w;
+    if (font.widthOfTextAtSize(trial, size) <= maxW) {
+      cur = trial;
+    } else {
+      if (cur) lines.push(cur);
+      cur = w;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+// =====================================================================
+// Layout
+// =====================================================================
 
 function drawHeader(ctx: DrawCtx) {
-  const { page, font, bold, width } = ctx;
-  // Logo placeholder (text-only)
-  page.drawText("MEDICALLY MODERN", {
-    x: 50,
-    y: ctx.y - 8,
-    size: 22,
-    font: bold,
-    color: TEAL,
+  const { page, fonts, logo, width, marginX } = ctx;
+  // Logo
+  const logoMaxW = 150;
+  const aspect = logo.height / logo.width;
+  const logoH = logoMaxW * aspect;
+  page.drawImage(logo, {
+    x: marginX,
+    y: ctx.y - logoH,
+    width: logoMaxW,
+    height: logoH,
   });
-  // Right-side contact
-  page.drawText("Fax: (347) 503 - 7148", {
-    x: width - 230,
-    y: ctx.y,
-    size: 10,
-    font: bold,
-    color: TEXT,
-  });
-  page.drawText("Email: records@medicallymodern.com", {
-    x: width - 230,
-    y: ctx.y - 14,
-    size: 10,
-    font: bold,
-    color: TEXT,
-  });
-  ctx.y -= 30;
-  // Horizontal rule
+
+  // Right side: Fax + Email block
+  const rightX = width - marginX;
+  const fax = "(347) 503 - 7148";
+  const email = "records@medicallymodern.com";
+  const labelSize = 11;
+  const valueSize = 11;
+  const faxLabelW = fonts.bold.widthOfTextAtSize("Fax: ", labelSize);
+  const faxValueW = fonts.regular.widthOfTextAtSize(fax, valueSize);
+  const emailLabelW = fonts.bold.widthOfTextAtSize("Email: ", labelSize);
+  const emailValueW = fonts.regular.widthOfTextAtSize(email, valueSize);
+  const faxLineW = faxLabelW + faxValueW;
+  const emailLineW = emailLabelW + emailValueW;
+
+  const faxY = ctx.y - 22;
+  page.drawText("Fax: ", { x: rightX - faxLineW, y: faxY, size: labelSize, font: fonts.bold, color: TEXT });
+  page.drawText(fax, { x: rightX - faxLineW + faxLabelW, y: faxY, size: valueSize, font: fonts.regular, color: TEXT });
+
+  const emailY = ctx.y - 38;
+  page.drawText("Email: ", { x: rightX - emailLineW, y: emailY, size: labelSize, font: fonts.bold, color: TEXT });
+  page.drawText(email, { x: rightX - emailLineW + emailLabelW, y: emailY, size: valueSize, font: fonts.regular, color: TEXT });
+
+  ctx.y -= Math.max(logoH, 50);
+
+  // Teal divider
   page.drawLine({
-    start: { x: 50, y: ctx.y },
-    end: { x: width - 50, y: ctx.y },
-    thickness: 1,
+    start: { x: marginX, y: ctx.y },
+    end: { x: width - marginX, y: ctx.y },
+    thickness: 1.5,
     color: TEAL,
   });
   ctx.y -= 30;
+
   // Title
-  page.drawText("Medical Necessity Request", {
-    x: 50,
-    y: ctx.y,
-    size: 28,
-    font: bold,
+  const title = "Medical Necessity Request";
+  page.drawText(title, {
+    x: marginX,
+    y: ctx.y - 30,
+    size: 36,
+    font: fonts.bold,
     color: TEAL,
   });
-  ctx.y -= 40;
+  // Underline the title (Word doc has it underlined)
+  const titleW = fonts.bold.widthOfTextAtSize(title, 36);
+  page.drawLine({
+    start: { x: marginX, y: ctx.y - 32 - 4 },
+    end: { x: marginX + titleW, y: ctx.y - 32 - 4 },
+    thickness: 1.5,
+    color: TEAL,
+  });
+  ctx.y -= 60;
+}
+
+function drawSectionHeading(ctx: DrawCtx, text: string) {
+  const { page, fonts, marginX } = ctx;
+  const size = 18;
+  page.drawText(text, {
+    x: marginX,
+    y: ctx.y - size,
+    size,
+    font: fonts.bold,
+    color: TEXT,
+  });
+  // Underline
+  const w = fonts.bold.widthOfTextAtSize(text, size);
+  page.drawLine({
+    start: { x: marginX, y: ctx.y - size - 3 },
+    end: { x: marginX + w, y: ctx.y - size - 3 },
+    thickness: 1,
+    color: TEXT,
+  });
+  ctx.y -= size + 14;
 }
 
 function drawPatientInfo(ctx: DrawCtx, patient: Patient) {
-  const { page, font, bold } = ctx;
-  page.drawText("Patient Information", {
-    x: 50,
+  drawSectionHeading(ctx, "Patient Information");
+
+  const { page, fonts, marginX } = ctx;
+  // Name + DOB row
+  page.drawText("Name: ", { x: marginX, y: ctx.y, size: 12, font: fonts.bold, color: TEXT });
+  page.drawText(patient.name || "—", { x: marginX + 42, y: ctx.y, size: 12, font: fonts.regular, color: TEXT });
+  const dobX = marginX + 280;
+  page.drawText("Date of Birth: ", { x: dobX, y: ctx.y, size: 12, font: fonts.bold, color: TEXT });
+  page.drawText(patient.dob || "—", { x: dobX + 92, y: ctx.y, size: 12, font: fonts.regular, color: TEXT });
+  ctx.y -= 22;
+
+  // Situation line — drawn by caller per block, but we render a single
+  // "Situation:" prefix when there's just one block. Actually we render this
+  // as a part of the block heading. Skip here.
+  ctx.y -= 6;
+}
+
+function drawIntroAndLegend(ctx: DrawCtx) {
+  drawSectionHeading(ctx, "Medical Necessity Requirements");
+
+  const { page, fonts, marginX, width } = ctx;
+  const intro =
+    "After reviewing the initial documentation, we still need a few items for insurance approval. We\u2019re happy to help make this process as easy as possible.";
+  const lines = wrapText(intro, fonts.italic, 11, width - marginX * 2);
+  for (const line of lines) {
+    page.drawText(line, { x: marginX, y: ctx.y, size: 11, font: fonts.italic, color: GRAY });
+    ctx.y -= 14;
+  }
+  ctx.y -= 8;
+
+  // Legend: A ✘ means documentation is still needed.   A ✔ means already received.
+  let x = marginX;
+  const legY = ctx.y;
+  page.drawText("A ", { x, y: legY, size: 13, font: fonts.bold, color: TEXT });
+  x += fonts.bold.widthOfTextAtSize("A ", 13) + 4;
+  drawX(page, x + 4, legY + 4, RED);
+  x += 14;
+  page.drawText(" means documentation is still needed.   ", {
+    x,
+    y: legY,
+    size: 13,
+    font: fonts.bold,
+    color: TEXT,
+  });
+  x += fonts.bold.widthOfTextAtSize(" means documentation is still needed.   ", 13);
+  page.drawText("A ", { x, y: legY, size: 13, font: fonts.bold, color: TEXT });
+  x += fonts.bold.widthOfTextAtSize("A ", 13) + 4;
+  drawCheck(page, x + 4, legY + 4, GREEN);
+  x += 14;
+  page.drawText(" means already received.", {
+    x,
+    y: legY,
+    size: 13,
+    font: fonts.bold,
+    color: TEXT,
+  });
+  ctx.y -= 28;
+}
+
+function drawSituation(ctx: DrawCtx, situation: string) {
+  const { page, fonts, marginX } = ctx;
+  page.drawText("Situation:", { x: marginX, y: ctx.y, size: 13, font: fonts.bold, color: TEXT });
+  const w = fonts.bold.widthOfTextAtSize("Situation:", 13);
+  page.drawText(` ${situation}`, {
+    x: marginX + w,
     y: ctx.y,
-    size: 16,
-    font: bold,
+    size: 13,
+    font: fonts.regular,
     color: TEXT,
   });
   ctx.y -= 22;
-  page.drawText(`Name:`, { x: 50, y: ctx.y, size: 11, font: bold, color: TEXT });
-  page.drawText(patient.name, { x: 100, y: ctx.y, size: 11, font, color: TEXT });
-  page.drawText(`Date of Birth:`, { x: 290, y: ctx.y, size: 11, font: bold, color: TEXT });
-  page.drawText(patient.dob || "—", { x: 380, y: ctx.y, size: 11, font, color: TEXT });
-  ctx.y -= 30;
 }
 
-function drawIntro(ctx: DrawCtx) {
-  const { page, font, bold } = ctx;
-  page.drawText("Medical Necessity Requirements", {
-    x: 50,
-    y: ctx.y,
-    size: 16,
-    font: bold,
-    color: TEXT,
-  });
-  ctx.y -= 22;
-  page.drawText(
-    "After reviewing the initial documentation, we still need a few items for insurance",
-    { x: 50, y: ctx.y, size: 10, font, color: TEXT },
-  );
-  ctx.y -= 13;
-  page.drawText(
-    "approval. We're happy to help make this process as easy as possible.",
-    { x: 50, y: ctx.y, size: 10, font, color: TEXT },
-  );
-  ctx.y -= 22;
-  page.drawText("A", { x: 50, y: ctx.y, size: 11, font: bold, color: TEXT });
-  drawX(page, 65, ctx.y + 4, RED);
-  page.drawText("means documentation is still needed.", { x: 73, y: ctx.y, size: 11, font: bold, color: TEXT });
-  ctx.y -= 14;
-  page.drawText("A", { x: 50, y: ctx.y, size: 11, font: bold, color: TEXT });
-  drawCheck(page, 65, ctx.y + 4, GREEN);
-  page.drawText("means already received.", { x: 73, y: ctx.y, size: 11, font: bold, color: TEXT });
-  ctx.y -= 18;
-}
+const COL_X_STATUS = 0; // relative to table-x
+const COL_X_REQ = 60;
+const COL_X_EX = 220;
 
-function drawBlock(
-  ctx: DrawCtx,
-  block: Block,
-  allReasons: string[],
-) {
-  const { page, font, bold, width } = ctx;
-  // Section title
-  page.drawText(block.title, { x: 50, y: ctx.y, size: 13, font: bold, color: TEAL });
-  ctx.y -= 18;
-  // Situation line
-  page.drawText("Situation: ", { x: 50, y: ctx.y, size: 11, font: bold, color: TEXT });
-  page.drawText(block.situation, { x: 110, y: ctx.y, size: 11, font, color: TEXT });
-  ctx.y -= 22;
-
-  // Table header
-  const tableX = 50;
-  const tableW = width - 100;
+function drawTableHeader(ctx: DrawCtx) {
+  const { page, fonts, marginX, width } = ctx;
+  const tableX = marginX;
+  const tableW = width - marginX * 2;
+  const rowH = 26;
   page.drawRectangle({
     x: tableX,
-    y: ctx.y - 4,
+    y: ctx.y - rowH + 4,
     width: tableW,
-    height: 22,
-    color: rgb(0.94, 0.94, 0.94),
+    height: rowH,
+    color: LIGHT,
+    borderColor: BORDER,
+    borderWidth: 0.5,
   });
-  page.drawText("Status", { x: tableX + 8, y: ctx.y + 4, size: 10, font: bold, color: TEXT });
-  page.drawText("Requirement", { x: tableX + 70, y: ctx.y + 4, size: 10, font: bold, color: TEXT });
-  page.drawText("Examples of simple language for each requirement", { x: tableX + 230, y: ctx.y + 4, size: 10, font: bold, color: TEXT });
-  ctx.y -= 22;
+  const baseY = ctx.y - rowH + 4 + 9;
+  page.drawText("Status", { x: tableX + COL_X_STATUS + 10, y: baseY, size: 12, font: fonts.bold, color: TEXT });
+  page.drawText("Requirement", { x: tableX + COL_X_REQ, y: baseY, size: 12, font: fonts.bold, color: TEXT });
+  page.drawText("Examples of simple language for each requirement", {
+    x: tableX + COL_X_EX,
+    y: baseY,
+    size: 12,
+    font: fonts.bold,
+    color: TEXT,
+  });
+  ctx.y -= rowH;
+}
 
-  // Rows
-  for (const req of block.requirements) {
-    const received = isReceived(req, allReasons);
-    page.drawRectangle({
-      x: tableX,
-      y: ctx.y - 4,
-      width: tableW,
-      height: 24,
-      borderColor: BORDER,
-      borderWidth: 0.5,
-    });
-    if (received) drawCheck(page, tableX + 18, ctx.y + 8, GREEN);
-    else drawX(page, tableX + 18, ctx.y + 8, RED);
-    page.drawText(req.name, {
-      x: tableX + 70,
-      y: ctx.y + 6,
-      size: 10,
-      font,
+function drawTableRow(ctx: DrawCtx, row: ReqRow, allReasons: string[]) {
+  const { page, fonts, marginX, width } = ctx;
+  const tableX = marginX;
+  const tableW = width - marginX * 2;
+  const reqW = COL_X_EX - COL_X_REQ - 8;
+  const exW = tableW - COL_X_EX - 10;
+
+  // Wrap text in each column
+  const reqLines = wrapText(row.name, fonts.regular, 11, reqW);
+  const exParas = Array.isArray(row.examples) ? row.examples : row.examples ? [row.examples] : [];
+  const exLines: string[] = [];
+  for (const p of exParas) {
+    const wrapped = wrapText(p, fonts.italic, 10, exW);
+    exLines.push(...wrapped);
+  }
+  const linesNeeded = Math.max(reqLines.length, exLines.length, 1);
+  const lineH = 14;
+  const padY = 10;
+  const rowH = padY * 2 + linesNeeded * lineH;
+
+  // Row border
+  page.drawRectangle({
+    x: tableX,
+    y: ctx.y - rowH,
+    width: tableW,
+    height: rowH,
+    borderColor: BORDER,
+    borderWidth: 0.5,
+  });
+
+  // Status mark
+  const received = isReceived(row, allReasons);
+  const statusX = tableX + 22;
+  const statusY = ctx.y - rowH / 2;
+  if (received) drawCheck(page, statusX, statusY, GREEN);
+  else drawX(page, statusX, statusY, RED);
+
+  // Requirement column
+  let textY = ctx.y - padY - 11;
+  for (const line of reqLines) {
+    page.drawText(line, {
+      x: tableX + COL_X_REQ,
+      y: textY,
+      size: 11,
+      font: fonts.regular,
       color: TEXT,
     });
-    page.drawText(req.example, {
-      x: tableX + 230,
-      y: ctx.y + 6,
-      size: 9,
-      font,
-      color: LIGHT,
-    });
-    ctx.y -= 24;
+    textY -= lineH;
   }
-  ctx.y -= 16;
+
+  // Examples column (italic gray)
+  textY = ctx.y - padY - 10;
+  for (const line of exLines) {
+    page.drawText(line, {
+      x: tableX + COL_X_EX,
+      y: textY,
+      size: 10,
+      font: fonts.italic,
+      color: GRAY,
+    });
+    textY -= lineH;
+  }
+
+  ctx.y -= rowH;
 }
 
 function drawFooter(ctx: DrawCtx) {
-  const { page, font } = ctx;
-  page.drawText(
-    "For any questions, you can call Medically Modern at: (347) 503 - 7148",
-    { x: 50, y: 40, size: 9, font, color: LIGHT },
-  );
+  const { page, fonts, marginX, width } = ctx;
+  const text = "For any questions, you can call Medically Modern at: (347) 503 - 7148";
+  const tWidth = fonts.regular.widthOfTextAtSize(text, 9);
+  page.drawText(text, {
+    x: (width - tWidth) / 2,
+    y: 36,
+    size: 9,
+    font: fonts.regular,
+    color: GRAY,
+  });
+  // marginX referenced to keep param signature consistent
+  void marginX;
 }
 
 // =====================================================================
@@ -390,17 +619,39 @@ function drawFooter(ctx: DrawCtx) {
 
 export async function generateMnRequestPdf(patient: Patient): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  pdfDoc.registerFontkit(fontkit);
 
-  const ctx = newPage(pdfDoc, font, bold);
+  const [regBytes, boldBytes, italBytes, logoBytes] = await Promise.all([
+    fetchBytes(ROBOTO_REGULAR_URL),
+    fetchBytes(ROBOTO_BOLD_URL),
+    fetchBytes(ROBOTO_ITALIC_URL),
+    fetchBytes(LOGO_URL),
+  ]);
+  const fonts: Fonts = {
+    regular: await pdfDoc.embedFont(regBytes, { subset: true }),
+    bold: await pdfDoc.embedFont(boldBytes, { subset: true }),
+    italic: await pdfDoc.embedFont(italBytes, { subset: true }),
+  };
+  const logo = await pdfDoc.embedPng(logoBytes);
+
+  const page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+  const ctx: DrawCtx = {
+    page,
+    fonts,
+    logo,
+    width: PAGE_W,
+    height: PAGE_H,
+    y: PAGE_H - MARGIN_Y,
+    marginX: MARGIN_X,
+    pdfDoc,
+  };
 
   drawHeader(ctx);
   drawPatientInfo(ctx, patient);
-  drawIntro(ctx);
 
   const cgm = cgmBlock(patient.cgmCoveragePath);
   const ip = ipBlock(patient.ipCoveragePath);
+  const blocks = [cgm, ip].filter((b): b is TemplateBlock => b !== null);
 
   const allReasons = [
     ...splitReasons(patient.generalMnInvalidReasons),
@@ -408,30 +659,29 @@ export async function generateMnRequestPdf(patient: Patient): Promise<Uint8Array
     ...splitReasons(patient.ipMnInvalidReasons),
   ];
 
-  if (cgm) drawBlock(ctx, cgm, allReasons);
-  if (ip) drawBlock(ctx, ip, allReasons);
-
-  // Fallback block: if neither specific block applied, list the outstanding
-  // reasons directly so the doctor sees what's still needed.
-  if (!cgm && !ip && allReasons.length > 0) {
-    drawBlock(
-      ctx,
-      {
-        title: "Outstanding Items",
-        situation: "Items still needed for medical necessity approval",
-        requirements: allReasons.map((r) => ({
-          name: r,
-          example: "",
-          reasonKeys: [r],
-        })),
-      },
-      allReasons,
-    );
+  if (blocks.length === 0 && allReasons.length > 0) {
+    blocks.push({
+      situation: "Outstanding Items",
+      rows: allReasons.map((r) => ({ name: r, reasonKeys: [r] })),
+    });
   }
-  if (!cgm && !ip && allReasons.length === 0) {
-    ctx.page.drawText(
+
+  if (blocks.length > 0) {
+    drawIntroAndLegend(ctx);
+
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i];
+      drawSituation(ctx, b.situation);
+      drawTableHeader(ctx);
+      for (const row of b.rows) {
+        drawTableRow(ctx, row, allReasons);
+      }
+      ctx.y -= 18;
+    }
+  } else {
+    page.drawText(
       "(No outstanding items — medical necessity is established.)",
-      { x: 50, y: ctx.y, size: 11, font, color: LIGHT },
+      { x: MARGIN_X, y: ctx.y, size: 12, font: fonts.regular, color: GRAY },
     );
   }
 
@@ -457,5 +707,4 @@ export function previewMnRequestPdf(bytes: Uint8Array) {
   const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   window.open(url, "_blank");
-  // URL revocation handled when the new tab closes
 }
