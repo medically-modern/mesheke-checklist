@@ -263,14 +263,18 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
         loading={mondayFiles.loading}
       />
 
-      {/* Parachute: collapsed by default, chevron to expand.
-         Fax / Email: always visible, no collapsible. */}
+      {/* Parachute: the GenerateScripts / RequestLetter / OptionalFax cards
+         live behind a chevron. Mark every card in the group with a left
+         indigo accent so it's obvious which boxes are part of the
+         drop-down vs the always-visible cards above and below.
+         Fax / Email: cards are always visible, no group accent. */}
       {isParachute && (
         <CollapsibleHeader
           title="Generate Scripts & MN Request Letter"
           open={showAdvanced}
           onToggle={() => setShowAdvanced((o) => !o)}
           hint="Not needed for Parachute requests. Open to view if sending request by fax as well."
+          grouped
         />
       )}
       {(!isParachute || showAdvanced) && (
@@ -289,12 +293,17 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
             onCancelCgm={() => handleGenerateCgm(undefined)}
             onGenerateIp={() => handleGenerateIp("Generate")}
             onCancelIp={() => handleGenerateIp(undefined)}
+            grouped={isParachute}
           />
 
-          <RequestLetterCard patient={patient} />
+          <RequestLetterCard patient={patient} grouped={isParachute} />
 
           {isParachute && (
-            <OptionalFaxCard sending={sending} onSend={handleSend} />
+            <OptionalFaxCard
+              patient={patient}
+              sending={sending}
+              onSend={handleSend}
+            />
           )}
         </>
       )}
@@ -411,28 +420,38 @@ function ClinicalFilesCard({
 }
 
 function OptionalFaxCard({
+  patient,
   sending,
   onSend,
 }: {
+  patient: Patient;
   sending: boolean;
   onSend: () => void;
 }) {
   return (
-    <section className="rounded-xl border border-dashed bg-muted/20 p-4 flex items-center justify-between gap-3 flex-wrap">
+    <section className="rounded-xl border border-dashed bg-muted/20 border-l-4 border-l-indigo-300 p-4 flex items-center justify-between gap-3 flex-wrap">
       <div className="min-w-0">
         <p className="text-xs uppercase tracking-wider text-muted-foreground">
           Optional — Also send by Fax
         </p>
         <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-          Generates the MN Request PDF and dispatches via Supermail to the
-          doctor&apos;s @rcfax address — in addition to Parachute.
+          Generates the MN Request PDF and dispatches via Supermail in addition to Parachute.
         </p>
+        {patient.doctorFax ? (
+          <p className="text-xs font-mono text-foreground/80 mt-1">
+            → {patient.doctorFax}
+          </p>
+        ) : (
+          <p className="text-xs text-amber-700 mt-1">
+            (no doctor fax on file)
+          </p>
+        )}
       </div>
       <Button
         variant="outline"
         size="sm"
         onClick={onSend}
-        disabled={sending}
+        disabled={sending || !patient.doctorFax}
         className="gap-2"
       >
         {sending ? (
@@ -456,16 +475,20 @@ function CollapsibleHeader({
   open,
   onToggle,
   hint,
+  grouped,
 }: {
   title: string;
   open: boolean;
   onToggle: () => void;
   hint?: string;
+  grouped?: boolean;
 }) {
   return (
     <button
       onClick={onToggle}
-      className="w-full rounded-xl bg-card border shadow-card px-5 py-3 flex items-center justify-between gap-3 hover:bg-muted/40 transition-colors text-left"
+      className={`w-full rounded-xl bg-card border shadow-card px-5 py-3 flex items-center justify-between gap-3 hover:bg-muted/40 transition-colors text-left ${
+        grouped ? "border-l-4 border-l-indigo-300" : ""
+      }`}
     >
       <span className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
         {open ? (
@@ -585,12 +608,19 @@ interface GenerateScriptsCardProps {
   onCancelCgm: () => void;
   onGenerateIp: () => void;
   onCancelIp: () => void;
+  /** When true, render with a left accent line marking it as part of
+   *  the Parachute drop-down group. */
+  grouped?: boolean;
 }
 
 function GenerateScriptsCard(props: GenerateScriptsCardProps) {
   if (!props.showCgm && !props.showIp) return null;
   return (
-    <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
+    <section
+      className={`rounded-xl bg-card border shadow-card p-5 space-y-3 ${
+        props.grouped ? "border-l-4 border-l-indigo-300" : ""
+      }`}
+    >
       <div>
         <p className="text-xs uppercase tracking-wider text-muted-foreground">
           Generate Scripts
@@ -747,7 +777,13 @@ function ScriptViewer({
   );
 }
 
-function RequestLetterCard({ patient }: { patient: Patient }) {
+function RequestLetterCard({
+  patient,
+  grouped,
+}: {
+  patient: Patient;
+  grouped?: boolean;
+}) {
   const [busy, setBusy] = useState<"preview" | "download" | null>(null);
 
   const generateAnd = async (mode: "preview" | "download") => {
@@ -766,7 +802,11 @@ function RequestLetterCard({ patient }: { patient: Patient }) {
   };
 
   return (
-    <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
+    <section
+      className={`rounded-xl bg-card border shadow-card p-5 space-y-3 ${
+        grouped ? "border-l-4 border-l-indigo-300" : ""
+      }`}
+    >
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground">
