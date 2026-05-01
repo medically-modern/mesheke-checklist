@@ -131,11 +131,12 @@ export const LMN_OPTS: StatusOption[] = [
   { label: "No", index: 2 },
 ];
 
+// Labels match Monday's "Insulin Pump Coverage Path" status column exactly.
 export const IP_PATH_OPTS: StatusOption[] = [
   { label: "Supplies Only", index: 0 },
-  { label: "1st Pump > 6M", index: 1 },
-  { label: "1st Pump < 6M", index: 2 },
-  { label: "New Pump (OOW)", index: 3 },
+  { label: "1st Pump >6M Diagnosed", index: 1 },
+  { label: "1st Pump <6M Diagnosed", index: 2 },
+  { label: "OOW Pump", index: 3 },
   { label: "Omnipod Switch", index: 4 },
   { label: "IW New Insurance", index: 5 },
 ];

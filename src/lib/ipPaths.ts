@@ -1,10 +1,13 @@
 // IP Coverage Path config — declarative table of which fields each path needs.
 
+// IMPORTANT: these labels must match Monday's "Insulin Pump Coverage Path"
+// (color_mm1w5xn1) status options exactly. Mismatched labels would either be
+// silently auto-created as duplicates or fail to round-trip through Reset.
 export const IP_PATHS = [
   "Supplies Only",
-  "1st Pump > 6M",
-  "1st Pump < 6M",
-  "New Pump (OOW)",
+  "1st Pump >6M Diagnosed",
+  "1st Pump <6M Diagnosed",
+  "OOW Pump",
   "Omnipod Switch",
   "IW New Insurance",
 ] as const;
@@ -31,7 +34,7 @@ export const IP_PATH_FIELDS: Record<IpPath, IpPathConfig> = {
     showOow: false,
     showMalfunction: false,
   },
-  "1st Pump > 6M": {
+  "1st Pump >6M Diagnosed": {
     showEducation: true,
     show3Injections: true,
     showCgmUse: true,
@@ -40,7 +43,7 @@ export const IP_PATH_FIELDS: Record<IpPath, IpPathConfig> = {
     showOow: false,
     showMalfunction: false,
   },
-  "1st Pump < 6M": {
+  "1st Pump <6M Diagnosed": {
     showEducation: true,
     show3Injections: true,
     showCgmUse: true,
@@ -49,7 +52,7 @@ export const IP_PATH_FIELDS: Record<IpPath, IpPathConfig> = {
     showOow: false,
     showMalfunction: false,
   },
-  "New Pump (OOW)": {
+  "OOW Pump": {
     showEducation: false,
     show3Injections: false,
     showCgmUse: false,

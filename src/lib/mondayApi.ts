@@ -66,6 +66,8 @@ export const COL = {
   medicalNecessity: "color_mm1y6qrf",
   mnEvalNotes: "long_text_mm27zjt2",
   generalMnInvalidReasons: "dropdown_mm2xppn8",
+  cgmMnInvalidReasons: "dropdown_mm2xncfh",
+  ipMnInvalidReasons: "dropdown_mm2xgg2y",
 
   // Script generation
   generateCgmScript: "color_mm1w2ey",

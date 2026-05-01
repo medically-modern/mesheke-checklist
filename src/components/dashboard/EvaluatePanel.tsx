@@ -335,6 +335,24 @@ export function EvaluatePanel({ patient, resetVersion = 0 }: Props) {
         ),
     });
     tasks.push({
+      label: "CGM MN Invalid Reasons",
+      run: () =>
+        writeDropdownLabels(
+          patient.id,
+          COL.cgmMnInvalidReasons,
+          preview.cgmMnInvalidReasons,
+        ),
+    });
+    tasks.push({
+      label: "Insulin Pump MN Invalid Reasons",
+      run: () =>
+        writeDropdownLabels(
+          patient.id,
+          COL.ipMnInvalidReasons,
+          preview.ipMnInvalidReasons,
+        ),
+    });
+    tasks.push({
       label: "MN Evaluation Notes",
       run: () => writeLongText(patient.id, COL.mnEvalNotes, state.notes ?? ""),
     });
