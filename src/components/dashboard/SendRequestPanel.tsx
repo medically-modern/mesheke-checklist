@@ -537,24 +537,29 @@ function ToggleRow({
   onCancel: () => void;
 }) {
   const disabled = missing.length > 0;
-  const tooltip = disabled ? `Missing: ${missing.join(", ")}` : undefined;
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50">
-      <span className="text-sm text-muted-foreground whitespace-nowrap">{label}</span>
+    <div className="flex items-start justify-between gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50">
+      <span className="text-sm text-muted-foreground whitespace-nowrap pt-1.5">
+        {label}
+      </span>
       {isGenerating ? (
         <div className="flex items-center gap-1">
           <span className="inline-flex items-center gap-1 h-8 px-3 text-xs font-medium rounded-md border border-amber-300 bg-amber-50 text-amber-900">
             <Loader2 className="h-3 w-3 animate-spin" />
             Generating…
           </span>
-          <Button variant="outline" size="sm" onClick={onCancel} className="h-8 px-2 text-xs" title="Cancel">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onCancel}
+            className="h-8 px-2 text-xs"
+            title="Cancel"
+          >
             <X className="h-3 w-3" />
           </Button>
         </div>
       ) : (
-        // Wrapper span carries the title so the tooltip works even on the
-        // disabled button (browsers don't fire hover events on disabled).
-        <span title={tooltip} className="inline-block">
+        <div className="flex flex-col items-end gap-1">
           <Button
             size="sm"
             onClick={onGenerate}
@@ -564,7 +569,13 @@ function ToggleRow({
             <FileText className="h-3 w-3" />
             Generate
           </Button>
-        </span>
+          {disabled && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-red-700 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 max-w-[260px] text-right">
+              <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+              Missing: {missing.join(", ")}
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
