@@ -130,101 +130,97 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
     prevIpStatusRef.current = curr;
   }, [mondayFiles.generateIpStatus, update]);
 
-  // ---- Mark Request Sent ----
+  // ---- Send (Fax / Email): dispatch only. No stage advancement. ----
   const [sending, setSending] = useState(false);
-  const handleMarkSent = useCallback(async () => {
+  const handleSend = useCallback(async () => {
     if (!hasToken()) {
       toast.error("Monday token not configured");
       return;
     }
-    setSending(true);
     const method = patient.clinicalsMethod;
-    const isFaxOrEmail = method === "Fax" || method === "Email";
+    if (method !== "Fax" && method !== "Email") {
+      toast.error(`Send is only valid for Fax / Email. Method is ${method}.`);
+      return;
+    }
+    setSending(true);
     const today = new Date().toISOString().slice(0, 10);
-
-    const failures: string[] = [];
-    let dispatchOk = true;
-
-    // === PHASE 1: Dispatch (Fax/Email only). Sequential — upload needs the PDF
-    // bytes, and the Send Request trigger should only flip after the file is
-    // attached. If any step fails, we DO NOT mark the request as sent.
-    if (isFaxOrEmail) {
+    try {
+      let bytes: Uint8Array;
       try {
-        let bytes: Uint8Array;
-        try {
-          bytes = await generateMnRequestPdf(patient);
-        } catch (e) {
-          throw new Error(
-            `[1/3 generate PDF] ${e instanceof Error ? e.message : String(e)}`,
-          );
-        }
-        try {
-          const safeName = patient.name.replace(/[^a-zA-Z0-9_-]/g, "_");
-          await uploadFileToColumn(
-            patient.id,
-            COL.mnRequestLetter,
-            bytes,
-            `MN_Request_${safeName}.pdf`,
-          );
-        } catch (e) {
-          throw new Error(
-            `[2/3 upload PDF] ${e instanceof Error ? e.message : String(e)}`,
-          );
-        }
-        try {
-          await writeStatusLabel(patient.id, COL.sendRequestTrigger, "Send");
-        } catch (e) {
-          throw new Error(
-            `[3/3 trigger Send Request] ${e instanceof Error ? e.message : String(e)}`,
-          );
-        }
+        bytes = await generateMnRequestPdf(patient);
       } catch (e) {
-        dispatchOk = false;
-        const msg = e instanceof Error ? e.message : String(e);
-        console.error("[Send via Fax/Email] failed", msg);
-        failures.push(`Send via ${method}: ${msg}`);
+        throw new Error(`[1/4 generate PDF] ${e instanceof Error ? e.message : String(e)}`);
       }
+      try {
+        const safeName = patient.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+        await uploadFileToColumn(
+          patient.id,
+          COL.mnRequestLetter,
+          bytes,
+          `MN_Request_${safeName}.pdf`,
+        );
+      } catch (e) {
+        throw new Error(`[2/4 upload PDF] ${e instanceof Error ? e.message : String(e)}`);
+      }
+      try {
+        await writeStatusLabel(patient.id, COL.sendRequestTrigger, "Send");
+      } catch (e) {
+        throw new Error(`[3/4 trigger Send Request] ${e instanceof Error ? e.message : String(e)}`);
+      }
+      try {
+        await writeDate(patient.id, COL.requestSentAt, today);
+      } catch (e) {
+        throw new Error(`[4/4 Request Sent At] ${e instanceof Error ? e.message : String(e)}`);
+      }
+      toast.success(`Request sent — ${method === "Fax" ? "fax" : "email"} dispatched via Supermail`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[Send] failed", msg);
+      toast.error("Send failed", { description: msg });
+    } finally {
+      setSending(false);
     }
+  }, [patient]);
 
-    // === PHASE 2: Mark sent + advance stage. Only when dispatch succeeded
-    // (or for Parachute, which has no dispatch step here).
-    if (dispatchOk) {
-      const markTasks: { label: string; run: () => Promise<unknown> }[] = [
-        {
-          label: "Request Sent At",
-          run: () => writeDate(patient.id, COL.requestSentAt, today),
-        },
-        {
-          label: "Stage Advancer → Confirm Receipt",
-          run: () => writeStatusLabel(patient.id, COL.subStage, "Confirm Receipt"),
-        },
-      ];
-      const results = await Promise.allSettled(markTasks.map((t) => t.run()));
-      results.forEach((r, i) => {
-        if (r.status === "rejected") {
-          failures.push(
-            `${markTasks[i].label}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`,
-          );
-        }
-      });
+  // ---- Mark as Complete: advance stage. ----
+  const [completing, setCompleting] = useState(false);
+  const handleMarkComplete = useCallback(async () => {
+    if (!hasToken()) {
+      toast.error("Monday token not configured");
+      return;
     }
-
-    setSending(false);
+    setCompleting(true);
+    const today = new Date().toISOString().slice(0, 10);
+    const isParachute = patient.clinicalsMethod === "Parachute";
+    // Parachute skips Confirm Receipt (rep handles receipt-confirmation in the
+    // Parachute portal directly), so we route straight to Chase Clinicals.
+    const nextStage = isParachute ? "Chase Clinicals" : "Confirm Receipt";
+    const tasks: { label: string; run: () => Promise<unknown> }[] = [
+      {
+        label: "Request Sent At",
+        run: () => writeDate(patient.id, COL.requestSentAt, today),
+      },
+      {
+        label: `Stage Advancer → ${nextStage}`,
+        run: () => writeStatusLabel(patient.id, COL.subStage, nextStage),
+      },
+    ];
+    const results = await Promise.allSettled(tasks.map((t) => t.run()));
+    const failures: string[] = [];
+    results.forEach((r, i) => {
+      if (r.status === "rejected") {
+        failures.push(
+          `${tasks[i].label}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`,
+        );
+      }
+    });
+    setCompleting(false);
     if (failures.length === 0) {
-      toast.success(
-        isFaxOrEmail
-          ? `Request sent — ${method === "Fax" ? "fax" : "email"} dispatched via Supermail`
-          : "Request marked as sent — Monday will route to next stage",
-      );
+      toast.success(`Marked complete — moved to ${nextStage}`);
     } else {
-      toast.error(
-        dispatchOk
-          ? `${failures.length} write(s) failed`
-          : "Send failed — request not marked as sent",
-        {
-          description: failures.slice(0, 3).join("\n"),
-        },
-      );
+      toast.error(`${failures.length} write(s) failed`, {
+        description: failures.slice(0, 3).join("\n"),
+      });
     }
   }, [patient]);
 
@@ -302,7 +298,9 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
       <SendActionCard
         patient={patient}
         sending={sending}
-        onMarkSent={handleMarkSent}
+        completing={completing}
+        onSend={handleSend}
+        onMarkComplete={handleMarkComplete}
       />
     </div>
   );
@@ -789,22 +787,22 @@ const PARACHUTE_URL = "https://dme.parachutehealth.com/u/r/BGP3-YIEG1-Z8-SL/dash
 function SendActionCard({
   patient,
   sending,
-  onMarkSent,
+  completing,
+  onSend,
+  onMarkComplete,
 }: {
   patient: Patient;
   sending: boolean;
-  onMarkSent: () => void;
+  completing: boolean;
+  onSend: () => void;
+  onMarkComplete: () => void;
 }) {
   const method = patient.clinicalsMethod ?? "Fax";
   const alreadySent = !!patient.requestSentAt;
   const sentDate = formatDate(patient.requestSentAt);
   const sentDays = daysSince(patient.requestSentAt);
   const isParachute = method === "Parachute";
-
-  const handleClick = () => {
-    if (isParachute) window.open(PARACHUTE_URL, "_blank");
-    onMarkSent();
-  };
+  const isFaxOrEmail = method === "Fax" || method === "Email";
 
   return (
     <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
@@ -818,24 +816,11 @@ function SendActionCard({
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <span className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-md border bg-muted/30">
-            {method === "Fax" ? (
-              <Mail className="h-4 w-4" />
-            ) : method === "Parachute" ? (
-              <Send className="h-4 w-4" />
-            ) : (
-              <Mail className="h-4 w-4" />
-            )}
-            Send via {method}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {method === "Fax" && (patient.doctorFax ? `→ ${patient.doctorFax}` : "(no doctor fax on file)")}
-            {method === "Parachute" && "→ Parachute portal"}
-            {method === "Email" && (patient.doctorEmail ? `→ ${patient.doctorEmail}` : "(no doctor email on file)")}
-          </span>
-        </div>
-
+        <span className="text-xs text-muted-foreground">
+          {method === "Fax" && (patient.doctorFax ? `→ ${patient.doctorFax}` : "(no doctor fax on file)")}
+          {method === "Parachute" && "→ Parachute portal"}
+          {method === "Email" && (patient.doctorEmail ? `→ ${patient.doctorEmail}` : "(no doctor email on file)")}
+        </span>
         {alreadySent && (
           <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-300 rounded-full px-3 py-1">
             <Check className="h-3.5 w-3.5" />
@@ -853,37 +838,55 @@ function SendActionCard({
         </div>
       )}
 
-      <div className="flex justify-end pt-1">
+      <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
+        {/* Left: dispatch (Fax/Email) or portal link (Parachute) */}
+        {isFaxOrEmail ? (
+          <Button
+            variant="outline"
+            onClick={onSend}
+            disabled={sending}
+            className="gap-2"
+          >
+            {sending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Sending…
+              </>
+            ) : (
+              <>
+                {method === "Fax" ? <Mail className="h-4 w-4" /> : <Mail className="h-4 w-4" />}
+                Send via {method}
+              </>
+            )}
+          </Button>
+        ) : isParachute ? (
+          <a
+            href={PARACHUTE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-md border border-input bg-background hover:bg-muted/50 text-sm font-medium"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Open Parachute Portal
+          </a>
+        ) : null}
+
+        {/* Right: Mark as Complete */}
         <Button
           size="lg"
-          onClick={handleClick}
-          disabled={sending}
+          onClick={onMarkComplete}
+          disabled={completing}
           className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-elevate"
         >
-          {sending ? (
+          {completing ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              {isParachute ? "Opening Parachute…" : `Sending…`}
-            </>
-          ) : isParachute ? (
-            <>
-              <ExternalLink className="h-4 w-4" />
-              Send via Parachute
-            </>
-          ) : method === "Fax" ? (
-            <>
-              <Send className="h-4 w-4" />
-              Send via Fax
-            </>
-          ) : method === "Email" ? (
-            <>
-              <Send className="h-4 w-4" />
-              Send via Email
+              Marking…
             </>
           ) : (
             <>
-              <Send className="h-4 w-4" />
-              Mark Request Sent
+              <Check className="h-4 w-4" />
+              Mark as Complete
             </>
           )}
         </Button>
