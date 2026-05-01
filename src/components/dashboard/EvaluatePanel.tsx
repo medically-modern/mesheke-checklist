@@ -431,25 +431,6 @@ export function EvaluatePanel({ patient, resetVersion = 0 }: Props) {
               onChange={(v) => setCgmCoveragePath(v as CgmCoveragePath)}
             />
           </div>
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 items-center">
-            <GenerateScriptToggle
-              label="Generate CGM Script"
-              isGenerating={
-                state.generateCgmScript === "Generate" ||
-                mondayFiles.generateCgmStatus === "Generate"
-              }
-              onGenerate={() => handleGenerateCgm("Generate")}
-              onCancel={() => handleGenerateCgm(undefined)}
-            />
-            <MondayScriptViewer
-              label="CGM script template"
-              itemId={patient.id}
-              columnId={COL.cgmTemplate}
-              files={mondayFiles.cgmTemplate}
-              loading={mondayFiles.loading}
-              onDeleted={mondayFiles.refetch}
-            />
-          </div>
         </SectionCard>
       )}
 
@@ -473,26 +454,6 @@ export function EvaluatePanel({ patient, resetVersion = 0 }: Props) {
               onChange={(v) => setIpCoveragePath(v as IpPath)}
             />
           </div>
-          <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 items-center">
-            <GenerateScriptToggle
-              label="Generate Insulin Pump Script"
-              isGenerating={
-                state.generateIpScript === "Generate" ||
-                mondayFiles.generateIpStatus === "Generate"
-              }
-              onGenerate={() => handleGenerateIp("Generate")}
-              onCancel={() => handleGenerateIp(undefined)}
-            />
-            <MondayScriptViewer
-              label="Insulin Pump script template"
-              itemId={patient.id}
-              columnId={COL.ipTemplate}
-              files={mondayFiles.ipTemplate}
-              loading={mondayFiles.loading}
-              onDeleted={mondayFiles.refetch}
-            />
-          </div>
-
           {state.ipCoveragePath && (
             <IpCriteria state={state} patient={patient} update={update} />
           )}

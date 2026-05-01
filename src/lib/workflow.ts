@@ -59,6 +59,12 @@ export interface Patient {
   medicalNecessity?: string;
   mnEvalNotes?: string;
 
+  // MN Invalid Reasons (read as comma-separated text from Monday dropdowns)
+  generalMnInvalidReasons?: string;
+  cgmMnInvalidReasons?: string;
+  ipMnInvalidReasons?: string;
+  requestSentAt?: string;
+
   // Script generation
   generateCgmScript?: string;
   generateIpScript?: string;

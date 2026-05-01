@@ -18,6 +18,8 @@ import {
 
 interface Props {
   patient: Patient;
+  /** When true, the Doctor Info panel is expanded by default. */
+  defaultDoctorOpen?: boolean;
 }
 
 function Field({
@@ -46,8 +48,8 @@ function Field({
   );
 }
 
-export function PatientProfileCard({ patient }: Props) {
-  const [doctorOpen, setDoctorOpen] = useState(false);
+export function PatientProfileCard({ patient, defaultDoctorOpen = false }: Props) {
+  const [doctorOpen, setDoctorOpen] = useState(defaultDoctorOpen);
 
   return (
     <div className="rounded-xl bg-card border shadow-card p-4 space-y-4">

@@ -68,6 +68,7 @@ export const COL = {
   generalMnInvalidReasons: "dropdown_mm2xppn8",
   cgmMnInvalidReasons: "dropdown_mm2xncfh",
   ipMnInvalidReasons: "dropdown_mm2xgg2y",
+  requestSentAt: "date_mm2yg8x8",
 
   // Script generation
   generateCgmScript: "color_mm1w2ey",
@@ -111,6 +112,8 @@ export const READ_COLUMN_IDS: string[] = [
   COL.lmn, COL.oowDate, COL.malfunction, COL.diagnosis,
   // MRs
   COL.mrsClinicals, COL.lastVisit, COL.mrExpiryDate, COL.medicalNecessity, COL.mnEvalNotes,
+  COL.generalMnInvalidReasons, COL.cgmMnInvalidReasons, COL.ipMnInvalidReasons,
+  COL.requestSentAt,
   // Scripts
   COL.generateCgmScript, COL.generateIpScript,
   // Receipt / Chase

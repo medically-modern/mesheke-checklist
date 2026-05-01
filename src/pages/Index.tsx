@@ -124,9 +124,8 @@ const Index = () => {
                   </TabsContent>
 
                   <TabsContent value="sendRequest" className="space-y-5 mt-0">
-                    <PatientProfileCard patient={selected} />
-                    <DisconnectedBanner />
-                    <SendRequestPanel patient={selected} onUpdate={onUpdate} />
+                    <PatientProfileCard patient={selected} defaultDoctorOpen />
+                    <SendRequestPanel patient={selected} resetVersion={resetVersion} />
                   </TabsContent>
 
                   <TabsContent value="confirmReceipt" className="space-y-5 mt-0">
