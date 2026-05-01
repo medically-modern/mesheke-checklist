@@ -335,20 +335,30 @@ export async function uploadFileToColumn(
   fd.append("query", query);
   fd.append("variables[file]", new Blob([bytes as BlobPart], { type: mimeType }), filename);
 
-  const res = await fetch(`${MONDAY_API_URL}/file`, {
-    method: "POST",
-    headers: {
-      Authorization: token,
-      "API-Version": MONDAY_API_VERSION,
-      // NOTE: don't set Content-Type — browser sets multipart boundary
-    },
-    body: fd,
-  });
+  // Send only the Authorization header. Adding API-Version triggers a CORS
+  // preflight that Monday's file endpoint occasionally blocks.
+  let res: Response;
+  try {
+    res = await fetch(`${MONDAY_API_URL}/file`, {
+      method: "POST",
+      headers: { Authorization: token },
+      body: fd,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[uploadFileToColumn] network error", { itemId, columnId, msg });
+    throw new Error(`Upload network error (item ${itemId}, column ${columnId}): ${msg}`);
+  }
   if (!res.ok) {
     const txt = await res.text();
     throw new Error(`File upload failed (${res.status}): ${txt}`);
   }
-  const json = await res.json();
+  let json: { errors?: unknown };
+  try {
+    json = await res.json();
+  } catch {
+    json = {};
+  }
   if (json.errors) {
     throw new Error(`Monday file upload error: ${JSON.stringify(json.errors)}`);
   }

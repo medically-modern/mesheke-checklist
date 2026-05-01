@@ -150,20 +150,39 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
     // attached. If any step fails, we DO NOT mark the request as sent.
     if (isFaxOrEmail) {
       try {
-        const bytes = await generateMnRequestPdf(patient);
-        const safeName = patient.name.replace(/[^a-zA-Z0-9_-]/g, "_");
-        await uploadFileToColumn(
-          patient.id,
-          COL.mnRequestLetter,
-          bytes,
-          `MN_Request_${safeName}.pdf`,
-        );
-        await writeStatusLabel(patient.id, COL.sendRequestTrigger, "Send");
+        let bytes: Uint8Array;
+        try {
+          bytes = await generateMnRequestPdf(patient);
+        } catch (e) {
+          throw new Error(
+            `[1/3 generate PDF] ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+        try {
+          const safeName = patient.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+          await uploadFileToColumn(
+            patient.id,
+            COL.mnRequestLetter,
+            bytes,
+            `MN_Request_${safeName}.pdf`,
+          );
+        } catch (e) {
+          throw new Error(
+            `[2/3 upload PDF] ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+        try {
+          await writeStatusLabel(patient.id, COL.sendRequestTrigger, "Send");
+        } catch (e) {
+          throw new Error(
+            `[3/3 trigger Send Request] ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
       } catch (e) {
         dispatchOk = false;
-        failures.push(
-          `Send via ${method}: ${e instanceof Error ? e.message : String(e)}`,
-        );
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("[Send via Fax/Email] failed", msg);
+        failures.push(`Send via ${method}: ${msg}`);
       }
     }
 
