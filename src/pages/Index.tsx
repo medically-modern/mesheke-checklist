@@ -4,6 +4,7 @@ import type { Patient } from "@/lib/workflow";
 import { EvaluatePanel } from "@/components/dashboard/EvaluatePanel";
 import { SendRequestPanel } from "@/components/dashboard/SendRequestPanel";
 import { ReceiptChasePanel } from "@/components/dashboard/ReceiptChasePanel";
+import { ConfirmReceiptPanel } from "@/components/dashboard/ConfirmReceiptPanel";
 import { PatientsSidebar } from "@/components/dashboard/PatientsSidebar";
 import { PatientProfileCard } from "@/components/dashboard/PatientProfileCard";
 import { Button } from "@/components/ui/button";
@@ -129,9 +130,8 @@ const Index = () => {
                   </TabsContent>
 
                   <TabsContent value="confirmReceipt" className="space-y-5 mt-0">
-                    <PatientProfileCard patient={selected} />
-                    <DisconnectedBanner />
-                    <ReceiptChasePanel patient={selected} mode="confirmReceipt" onUpdate={onUpdate} />
+                    <PatientProfileCard patient={selected} defaultDoctorOpen />
+                    <ConfirmReceiptPanel patient={selected} onUpdate={onUpdate} />
                   </TabsContent>
 
                   <TabsContent value="chase" className="space-y-5 mt-0">

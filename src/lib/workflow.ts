@@ -72,11 +72,16 @@ export interface Patient {
   // Confirm Receipt / Chase
   confirmChaseNotes?: string;
   confirmReceiptNotes?: string;
+  /** Unsuccessful Confirm Attempts dropdown — comma-separated chip labels
+   *  like "Attempt 1: Donna — 5/1/26, Attempt 2: Lisa — 5/4/26". */
+  unsuccessfulAttempts?: string;
   receiptConfirmedDate?: string;
   receiptConfirmedName?: string;
   chaseRecipientName?: string;
   mnAttempts?: string;
   nextActionDate?: string;
+  /** Escalation status — "Escalation Required" or "Done". */
+  escalation?: string;
 
   // Advancers
   advancer2a?: string;

@@ -83,11 +83,13 @@ export const COL = {
   // Confirm Receipt / Chase
   confirmChaseNotes: "text_mm1wssm8",
   confirmReceiptNotes: "text_mm1wbe5y",
+  unsuccessfulAttempts: "dropdown_mm2ywr7j",
   receiptConfirmedDate: "date_mm1wxpdk",
   receiptConfirmedName: "text_mm1wj9at",
   chaseRecipientName: "text_mm1wabj9",
   mnAttempts: "color_mm1wz0vg",
   nextActionDate: "date_mm1wadgs",
+  escalation: "color_mm1x7997",
 
   // Advancers
   advancer2a: "color_mm1w73jx",
@@ -122,8 +124,10 @@ export const READ_COLUMN_IDS: string[] = [
   COL.generateCgmScript, COL.generateIpScript,
   // Receipt / Chase
   COL.confirmChaseNotes, COL.confirmReceiptNotes,
-  COL.receiptConfirmedName, COL.chaseRecipientName,
+  COL.unsuccessfulAttempts,
+  COL.receiptConfirmedName, COL.receiptConfirmedDate, COL.chaseRecipientName,
   COL.mnAttempts, COL.nextActionDate,
+  COL.escalation,
   // Advancers
   COL.advancer2a, COL.advancer2b, COL.advancer2c, COL.advancer2d,
 ];

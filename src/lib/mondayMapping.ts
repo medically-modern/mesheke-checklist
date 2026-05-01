@@ -39,6 +39,9 @@ export const GEN_SCRIPT_STATUS = { ready: 0, generate: 1, notNeeded: 2 } as cons
 // MN Attempts: 0=Escalate, 1=Attempt 3, 2=Attempt 1, 3=Attempt 2
 export const MN_ATTEMPTS_INDEX = { escalate: 0, attempt3: 1, attempt1: 2, attempt2: 3 } as const;
 
+// Escalation: 0=Escalation Required, 1=Done
+export const ESCALATION_INDEX = { required: 0, done: 1 } as const;
+
 // Clinicals Method: 0=Fax, 1=Parachute, 2=Email
 export const CLINICALS_METHOD_INDEX = { fax: 0, parachute: 1, email: 2 } as const;
 
@@ -102,10 +105,13 @@ export function mondayItemToPatient(item: MondayItem): Patient {
     generateIpScript: col(item, "color_mm1w4wd8") || undefined,
     confirmChaseNotes: col(item, "text_mm1wssm8") || undefined,
     confirmReceiptNotes: col(item, "text_mm1wbe5y") || undefined,
+    unsuccessfulAttempts: col(item, "dropdown_mm2ywr7j") || undefined,
     receiptConfirmedName: col(item, "text_mm1wj9at") || undefined,
+    receiptConfirmedDate: col(item, "date_mm1wxpdk") || undefined,
     chaseRecipientName: col(item, "text_mm1wabj9") || undefined,
     mnAttempts: col(item, "color_mm1wz0vg") || undefined,
     nextActionDate: col(item, "date_mm1wadgs") || undefined,
+    escalation: col(item, "color_mm1x7997") || undefined,
     advancer2a: col(item, "color_mm1w73jx") || undefined,
     advancer2b: col(item, "color_mm1wfbkz") || undefined,
     advancer2c: col(item, "color_mm1wf98t") || undefined,
