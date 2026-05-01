@@ -38,6 +38,8 @@ import {
   Send,
   Mail,
   AlertTriangle,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 interface Props {
@@ -202,9 +204,17 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
         loading={mondayFiles.loading}
       />
 
-      {isParachute && !showAdvanced ? (
-        <ParachuteCollapsedNotice onShow={() => setShowAdvanced(true)} />
-      ) : (
+      <CollapsibleHeader
+        title="Generate Scripts & MN Request Letter"
+        open={showAdvanced}
+        onToggle={() => setShowAdvanced((o) => !o)}
+        hint={
+          isParachute
+            ? "Hidden by default for Parachute — submit through the portal"
+            : undefined
+        }
+      />
+      {showAdvanced && (
         <>
           <GenerateScriptsCard
             showCgm={showCgmGenerate}
@@ -223,19 +233,6 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
           />
 
           <RequestLetterCard patient={patient} />
-
-          {isParachute && (
-            <div className="flex justify-end">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowAdvanced(false)}
-                className="text-xs text-muted-foreground"
-              >
-                Hide for Parachute
-              </Button>
-            </div>
-          )}
         </>
       )}
 
@@ -252,28 +249,15 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
 // Sub-cards
 // =====================================================================
 
-const PARACHUTE_URL = "https://dme.parachutehealth.com/u/r/BGP3-YIEG1-Z8-SL/dashboard";
-
 function MethodBanner({ patient }: { patient: Patient }) {
   const method = patient.clinicalsMethod ?? "—";
   let className = "bg-muted text-muted-foreground border-muted";
-  let hint: React.ReactNode = "";
+  let hint = "";
   if (method === "Fax") {
     className = "bg-sky-100 text-sky-900 border-sky-300";
     hint = patient.doctorFax ? `→ ${patient.doctorFax}` : "(no doctor fax on file)";
   } else if (method === "Parachute") {
     className = "bg-indigo-100 text-indigo-900 border-indigo-300";
-    hint = (
-      <a
-        href={PARACHUTE_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 underline font-medium hover:opacity-80"
-      >
-        Submit via Parachute
-        <ExternalLink className="h-3 w-3" />
-      </a>
-    );
   } else if (method === "Email") {
     className = "bg-teal-100 text-teal-900 border-teal-300";
     hint = patient.doctorEmail ? `→ ${patient.doctorEmail}` : "(no doctor email on file)";
@@ -288,7 +272,7 @@ function MethodBanner({ patient }: { patient: Patient }) {
         <p className="text-[10px] uppercase tracking-wider opacity-70">Clinicals Method</p>
         <p className="text-lg font-semibold leading-tight">{method}</p>
       </div>
-      <span className="text-xs opacity-80 ml-auto truncate">{hint}</span>
+      {hint && <span className="text-xs opacity-80 ml-auto truncate">{hint}</span>}
     </section>
   );
 }
@@ -361,25 +345,36 @@ function ClinicalFilesCard({
   );
 }
 
-function ParachuteCollapsedNotice({ onShow }: { onShow: () => void }) {
+function CollapsibleHeader({
+  title,
+  open,
+  onToggle,
+  hint,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  hint?: string;
+}) {
   return (
-    <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
-      <div>
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">
-          Generate Scripts &amp; MN Request Letter
-        </p>
-        <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-          Hidden — this patient&apos;s clinicals method is Parachute, so scripts and
-          the request letter are handled inside the Parachute portal.
-        </p>
-      </div>
-      <div>
-        <Button variant="outline" size="sm" onClick={onShow} className="text-xs gap-1">
-          <ExternalLink className="h-3 w-3" />
-          Show anyway (for fax/email submission)
-        </Button>
-      </div>
-    </section>
+    <button
+      onClick={onToggle}
+      className="w-full rounded-xl bg-card border shadow-card px-5 py-3 flex items-center justify-between gap-3 hover:bg-muted/40 transition-colors text-left"
+    >
+      <span className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+        {open ? (
+          <ChevronDown className="h-3 w-3" />
+        ) : (
+          <ChevronRight className="h-3 w-3" />
+        )}
+        {title}
+      </span>
+      {hint && !open && (
+        <span className="text-[11px] text-muted-foreground/70 normal-case truncate">
+          {hint}
+        </span>
+      )}
+    </button>
   );
 }
 
