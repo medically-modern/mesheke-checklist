@@ -119,7 +119,7 @@ export async function sendPatientToMonday(
       tasks.push({
         label: "Confirm/Chase Notes",
         columnId: COL.confirmChaseNotes,
-        fn: () => writeText(p.id, COL.confirmChaseNotes, p.confirmChaseNotes!),
+        fn: () => writeLongText(p.id, COL.confirmChaseNotes, p.confirmChaseNotes!),
       });
     }
     // Advancer 2B → Complete + Sub-Stage → 2C
@@ -157,7 +157,7 @@ export async function sendPatientToMonday(
       tasks.push({
         label: "Confirm/Chase Notes",
         columnId: COL.confirmChaseNotes,
-        fn: () => writeText(p.id, COL.confirmChaseNotes, p.confirmChaseNotes!),
+        fn: () => writeLongText(p.id, COL.confirmChaseNotes, p.confirmChaseNotes!),
       });
     }
     // Advancer 2C → Complete + Sub-Stage → 2D
@@ -195,7 +195,7 @@ export async function sendPatientToMonday(
       tasks.push({
         label: "Confirm/Chase Notes",
         columnId: COL.confirmChaseNotes,
-        fn: () => writeText(p.id, COL.confirmChaseNotes, p.confirmChaseNotes!),
+        fn: () => writeLongText(p.id, COL.confirmChaseNotes, p.confirmChaseNotes!),
       });
     }
     // Advancer 2D → Complete

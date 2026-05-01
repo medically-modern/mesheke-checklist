@@ -104,7 +104,7 @@ export function mondayItemToPatient(item: MondayItem): Patient {
     requestSentAt: col(item, "date_mm2yg8x8") || undefined,
     generateCgmScript: col(item, "color_mm1w2ey") || undefined,
     generateIpScript: col(item, "color_mm1w4wd8") || undefined,
-    confirmChaseNotes: col(item, "text_mm1wssm8") || undefined,
+    confirmChaseNotes: col(item, "long_text_mm2ytsxp") || undefined,
     confirmReceiptNotes: col(item, "text_mm1wbe5y") || undefined,
     confirmAttempt1: col(item, "text_mm2yd068") || undefined,
     confirmAttempt2: col(item, "text_mm2y9h4a") || undefined,

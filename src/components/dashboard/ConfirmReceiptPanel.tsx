@@ -8,6 +8,7 @@ import {
   COL,
   hasToken,
   writeDate,
+  writeLongText,
   writeStatusIndex,
   writeText,
   type MondayFileEntry,
@@ -170,7 +171,7 @@ export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
         // a write per keystroke.
         onBlur={() => {
           if (patient.confirmChaseNotes !== undefined && hasToken()) {
-            void writeText(patient.id, COL.confirmChaseNotes, patient.confirmChaseNotes ?? "");
+            void writeLongText(patient.id, COL.confirmChaseNotes, patient.confirmChaseNotes ?? "");
           }
         }}
       />

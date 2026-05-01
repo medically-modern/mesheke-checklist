@@ -84,7 +84,7 @@ export const COL = {
   sendRequestTrigger: "color_mm2y7t2x",
 
   // Confirm Receipt / Chase
-  confirmChaseNotes: "text_mm1wssm8",
+  confirmChaseNotes: "long_text_mm2ytsxp",
   confirmReceiptNotes: "text_mm1wbe5y",
   // Per-attempt columns — each holds "Name — M/D/YY" for one
   // unsuccessful confirm-receipt attempt.
