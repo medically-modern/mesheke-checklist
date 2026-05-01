@@ -353,7 +353,7 @@ function ReasonRow({ label, reasons }: { label: string; reasons: string[] }) {
   }
   return (
     <div className="flex items-baseline gap-3 flex-wrap">
-      <span className="text-[11px] uppercase tracking-wider text-muted-foreground w-[80px]">
+      <span className="text-[11px] uppercase tracking-wider text-muted-foreground w-[110px] shrink-0 whitespace-nowrap">
         {label}
       </span>
       <div className="flex flex-wrap gap-1">
@@ -525,22 +525,6 @@ function ScriptViewer({
 function RequestLetterCard({ patient }: { patient: Patient }) {
   const [busy, setBusy] = useState<"preview" | "download" | null>(null);
 
-  const established = patient.medicalNecessity === "Established";
-
-  // List the blocks that will appear in the generated PDF based on coverage
-  // paths and outstanding reasons.
-  const willInclude: string[] = [];
-  if (patient.cgmCoveragePath === "Insulin") willInclude.push("CGM — Insulin");
-  else if (patient.cgmCoveragePath === "Hypo") willInclude.push("CGM — Hypoglycemia");
-  if (patient.ipCoveragePath === "1st Pump >6M Diagnosed") willInclude.push("First Time Pump (>6 mo)");
-  else if (patient.ipCoveragePath === "1st Pump <6M Diagnosed") willInclude.push("First Time Pump (<6 mo) + LMN");
-  else if (patient.ipCoveragePath === "OOW Pump") willInclude.push("OOW Pump replacement");
-  else if (patient.ipCoveragePath === "Omnipod Switch") willInclude.push("Omnipod Switch");
-  else if (patient.ipCoveragePath === "IW New Insurance") willInclude.push("Continuation on new insurance");
-  if (willInclude.length === 0 && !established) {
-    willInclude.push("Outstanding items (from MN Invalid Reasons)");
-  }
-
   const generateAnd = async (mode: "preview" | "download") => {
     setBusy(mode);
     try {
@@ -558,33 +542,17 @@ function RequestLetterCard({ patient }: { patient: Patient }) {
 
   return (
     <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
-      <div>
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">
-          MN Request Letter
-        </p>
-        <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-          Generated dynamically — patient name, situation, and ✓ / ✗ marks are
-          filled in from the current coverage paths and Monday MN Invalid
-          Reasons.
-        </p>
-      </div>
-
-      {established && willInclude.length === 0 ? (
-        <div className="rounded-md border border-dashed bg-emerald-50 border-emerald-200 p-4 text-xs text-emerald-900">
-          Medical Necessity is Established — no request letter needed. (You can still generate one if you want a paper trail.)
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            MN Request Letter
+          </p>
+          <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+            Generated from the data above — patient name, situation, and check marks
+            are filled in automatically.
+          </p>
         </div>
-      ) : null}
-
-      <div className="rounded-md border bg-muted/20 px-3 py-3 space-y-2">
-        <div className="text-xs">
-          <p className="font-medium">Will include:</p>
-          <ul className="list-disc list-inside text-muted-foreground mt-1 space-y-0.5">
-            {willInclude.map((b) => (
-              <li key={b}>{b}</li>
-            ))}
-          </ul>
-        </div>
-        <div className="flex items-center gap-2 justify-end pt-1">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"

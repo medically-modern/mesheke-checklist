@@ -2,8 +2,27 @@
 // Replaces the static manually-edited templates with one that fills in patient
 // info + ✓/✗ marks based on the patient's current Monday MN Invalid Reasons.
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import {
+  PDFDocument,
+  StandardFonts,
+  rgb,
+  type PDFFont,
+  type PDFPage,
+  type RGB,
+} from "pdf-lib";
 import type { Patient } from "./workflow";
+
+// Standard PDF fonts use WinAnsi encoding which can't render Unicode
+// checkmark/cross glyphs (✓ U+2713, ✗ U+2717). Draw the shapes instead.
+function drawCheck(page: PDFPage, cx: number, cy: number, color: RGB) {
+  // V-shape: down-stroke then up-stroke
+  page.drawLine({ start: { x: cx - 4, y: cy + 1 }, end: { x: cx - 1, y: cy - 3 }, thickness: 2, color });
+  page.drawLine({ start: { x: cx - 1, y: cy - 3 }, end: { x: cx + 5, y: cy + 5 }, thickness: 2, color });
+}
+function drawX(page: PDFPage, cx: number, cy: number, color: RGB) {
+  page.drawLine({ start: { x: cx - 4, y: cy - 4 }, end: { x: cx + 4, y: cy + 4 }, thickness: 2, color });
+  page.drawLine({ start: { x: cx + 4, y: cy - 4 }, end: { x: cx - 4, y: cy + 4 }, thickness: 2, color });
+}
 
 interface Requirement {
   name: string;
@@ -286,13 +305,13 @@ function drawIntro(ctx: DrawCtx) {
     { x: 50, y: ctx.y, size: 10, font, color: TEXT },
   );
   ctx.y -= 22;
-  page.drawText("A ", { x: 50, y: ctx.y, size: 11, font: bold, color: TEXT });
-  page.drawText("✗", { x: 63, y: ctx.y, size: 12, font: bold, color: RED });
-  page.drawText(" means documentation is still needed.", { x: 73, y: ctx.y, size: 11, font: bold, color: TEXT });
+  page.drawText("A", { x: 50, y: ctx.y, size: 11, font: bold, color: TEXT });
+  drawX(page, 65, ctx.y + 4, RED);
+  page.drawText("means documentation is still needed.", { x: 73, y: ctx.y, size: 11, font: bold, color: TEXT });
   ctx.y -= 14;
-  page.drawText("A ", { x: 50, y: ctx.y, size: 11, font: bold, color: TEXT });
-  page.drawText("✓", { x: 63, y: ctx.y, size: 12, font: bold, color: GREEN });
-  page.drawText(" means already received.", { x: 73, y: ctx.y, size: 11, font: bold, color: TEXT });
+  page.drawText("A", { x: 50, y: ctx.y, size: 11, font: bold, color: TEXT });
+  drawCheck(page, 65, ctx.y + 4, GREEN);
+  page.drawText("means already received.", { x: 73, y: ctx.y, size: 11, font: bold, color: TEXT });
   ctx.y -= 18;
 }
 
@@ -336,13 +355,8 @@ function drawBlock(
       borderColor: BORDER,
       borderWidth: 0.5,
     });
-    page.drawText(received ? "✓" : "✗", {
-      x: tableX + 14,
-      y: ctx.y + 4,
-      size: 14,
-      font: bold,
-      color: received ? GREEN : RED,
-    });
+    if (received) drawCheck(page, tableX + 18, ctx.y + 8, GREEN);
+    else drawX(page, tableX + 18, ctx.y + 8, RED);
     page.drawText(req.name, {
       x: tableX + 70,
       y: ctx.y + 6,
