@@ -403,6 +403,43 @@ export async function deleteFileFromColumn(
   await gql(query, { itemId, columnId });
 }
 
+/**
+ * Remove a single file from a Monday file column by asset id.
+ *
+ * Monday's API only exposes "clear all" for file columns, so this is
+ * implemented as: download every file we want to keep, clear the
+ * column, then re-upload the kept files. Slow if the column has many
+ * files but it's the only path that doesn't take down the whole column.
+ */
+export async function deleteSingleFileFromColumn(
+  itemId: string,
+  columnId: string,
+  keepFiles: { name: string; url: string }[],
+): Promise<void> {
+  // 1) Pull the bytes of every file we want to keep before clearing.
+  //    public_url is preferred but private url works too — both serve
+  //    Monday-CDN-hosted assets with permissive CORS.
+  const kept: { name: string; bytes: Uint8Array }[] = [];
+  for (const f of keepFiles) {
+    const res = await fetch(f.url);
+    if (!res.ok) {
+      throw new Error(
+        `Failed to download "${f.name}" before delete (${res.status}). Aborted.`,
+      );
+    }
+    const buf = await res.arrayBuffer();
+    kept.push({ name: f.name, bytes: new Uint8Array(buf) });
+  }
+
+  // 2) Clear the column.
+  await deleteFileFromColumn(itemId, columnId);
+
+  // 3) Re-upload the kept files in order.
+  for (const k of kept) {
+    await uploadFileToColumn(itemId, columnId, k.bytes, k.name);
+  }
+}
+
 export async function fetchItemFileColumns(
   itemId: string,
   columnIds: string[],

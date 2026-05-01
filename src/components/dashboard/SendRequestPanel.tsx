@@ -11,6 +11,7 @@ import {
   COL,
   clearStatusColumn,
   deleteFileFromColumn,
+  deleteSingleFileFromColumn,
   hasToken,
   uploadFileToColumn,
   writeDateTime,
@@ -108,16 +109,27 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
     [triggerGenerate],
   );
 
-  // ---- Delete a file column on Monday (used by script templates and
-  //      MN Request Letter — same pattern). ----
-  const deleteColumn = useCallback(
-    async (columnId: string, label: string) => {
+  // ---- Delete a single file from a Monday file column.
+  //      Looks up the list of current files in the column, computes the
+  //      "keep" set by asset id, then asks the API to do download +
+  //      clear + re-upload. If the deleted file is the only one, the
+  //      keep list is empty and we just clear the column. ----
+  const deleteOne = useCallback(
+    async (columnId: string, allFiles: MondayFileEntry[], assetId: string, label: string) => {
       if (!hasToken()) {
         toast.error("Monday token not configured");
         return;
       }
+      const keep = allFiles
+        .filter((f) => f.assetId !== assetId)
+        .map((f) => ({ name: f.name, url: f.public_url || f.url }))
+        .filter((f) => !!f.url);
       try {
-        await deleteFileFromColumn(patient.id, columnId);
+        if (keep.length === 0) {
+          await deleteFileFromColumn(patient.id, columnId);
+        } else {
+          await deleteSingleFileFromColumn(patient.id, columnId, keep);
+        }
         await mondayFiles.refetch();
         toast.success(`${label} deleted`);
       } catch (e) {
@@ -129,18 +141,20 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
     [patient.id, mondayFiles],
   );
 
-  const handleDeleteTemplate = useCallback(
-    (kind: "cgm" | "ip") => {
-      const columnId = kind === "cgm" ? COL.cgmTemplate : COL.ipTemplate;
-      const label = kind === "cgm" ? "CGM script template" : "Insulin Pump script template";
-      return deleteColumn(columnId, label);
-    },
-    [deleteColumn],
+  const handleDeleteCgmFile = useCallback(
+    (assetId: string) =>
+      deleteOne(COL.cgmTemplate, mondayFiles.cgmTemplate, assetId, "CGM script template"),
+    [deleteOne, mondayFiles.cgmTemplate],
   );
-
-  const handleDeleteMnRequestLetter = useCallback(
-    () => deleteColumn(COL.mnRequestLetter, "MN Request Letter"),
-    [deleteColumn],
+  const handleDeleteIpFile = useCallback(
+    (assetId: string) =>
+      deleteOne(COL.ipTemplate, mondayFiles.ipTemplate, assetId, "Insulin Pump script template"),
+    [deleteOne, mondayFiles.ipTemplate],
+  );
+  const handleDeleteMnRequestLetterFile = useCallback(
+    (assetId: string) =>
+      deleteOne(COL.mnRequestLetter, mondayFiles.mnRequestLetter, assetId, "MN Request Letter"),
+    [deleteOne, mondayFiles.mnRequestLetter],
   );
 
   // ---- Generate MN Request Letter: build PDF + upload to Monday column.
@@ -341,8 +355,8 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
             onCancelCgm={() => handleGenerateCgm(undefined)}
             onGenerateIp={() => handleGenerateIp("Generate")}
             onCancelIp={() => handleGenerateIp(undefined)}
-            onDeleteCgm={() => handleDeleteTemplate("cgm")}
-            onDeleteIp={() => handleDeleteTemplate("ip")}
+            onDeleteCgm={handleDeleteCgmFile}
+            onDeleteIp={handleDeleteIpFile}
             grouped={isParachute}
           />
 
@@ -351,7 +365,7 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
             loading={mondayFiles.loading}
             generating={generatingLetter}
             onGenerate={handleGenerateMnRequestLetter}
-            onDelete={handleDeleteMnRequestLetter}
+            onDelete={handleDeleteMnRequestLetterFile}
             grouped={isParachute}
           />
 
@@ -374,8 +388,14 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
         onMarkComplete={handleMarkComplete}
         attachments={[
           { label: "MN Request Letter", count: mondayFiles.mnRequestLetter.length, required: true },
-          { label: "CGM Script Template", count: mondayFiles.cgmTemplate.length },
-          { label: "Insulin Pump Script Template", count: mondayFiles.ipTemplate.length },
+          // Script template rows only show when this patient is being
+          // served that product — otherwise the row is meaningless.
+          ...(showCgmGenerate
+            ? [{ label: "CGM Script Template", count: mondayFiles.cgmTemplate.length }]
+            : []),
+          ...(showIpGenerate
+            ? [{ label: "Insulin Pump Script Template", count: mondayFiles.ipTemplate.length }]
+            : []),
           { label: "Clinical Files", count: mondayFiles.clinicalFiles.length },
         ]}
       />
@@ -670,8 +690,8 @@ interface GenerateScriptsCardProps {
   onCancelCgm: () => void;
   onGenerateIp: () => void;
   onCancelIp: () => void;
-  onDeleteCgm: () => void | Promise<void>;
-  onDeleteIp: () => void | Promise<void>;
+  onDeleteCgm: (assetId: string) => void | Promise<void>;
+  onDeleteIp: (assetId: string) => void | Promise<void>;
   /** When true, render with a left accent line marking it as part of
    *  the Parachute drop-down group. */
   grouped?: boolean;
@@ -800,21 +820,21 @@ function ScriptViewer({
   label: string;
   files: MondayFileEntry[];
   loading: boolean;
-  /** Clear all files in the underlying Monday column. */
-  onDelete?: () => void | Promise<void>;
+  /** Delete the specific file by asset id. */
+  onDelete?: (assetId: string) => void | Promise<void>;
 }) {
-  const [deleting, setDeleting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const handleDelete = async () => {
+  const handleDelete = async (file: MondayFileEntry) => {
     if (!onDelete) return;
-    if (!window.confirm(`Delete ${label} from Monday? This can't be undone.`)) {
+    if (!window.confirm(`Delete "${file.name}" from Monday? This can't be undone.`)) {
       return;
     }
-    setDeleting(true);
+    setDeletingId(file.assetId);
     try {
-      await onDelete();
+      await onDelete(file.assetId);
     } finally {
-      setDeleting(false);
+      setDeletingId(null);
     }
   };
 
@@ -868,12 +888,12 @@ function ScriptViewer({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleDelete}
-                disabled={deleting}
-                title="Delete from Monday"
+                onClick={() => handleDelete(f)}
+                disabled={deletingId !== null}
+                title={`Delete "${f.name}" from Monday`}
                 className="h-7 px-2 text-[11px] text-red-600 hover:bg-red-50 hover:text-red-700"
               >
-                {deleting ? (
+                {deletingId === f.assetId ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
                   <Trash2 className="h-3 w-3" />
@@ -899,7 +919,7 @@ function RequestLetterCard({
   loading: boolean;
   generating: boolean;
   onGenerate: () => void | Promise<void>;
-  onDelete: () => void | Promise<void>;
+  onDelete: (assetId: string) => void | Promise<void>;
   grouped?: boolean;
 }) {
   const hasLetter = files.length > 0;
@@ -911,25 +931,22 @@ function RequestLetterCard({
     >
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">
-              MN Request Letter
-            </p>
-            <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200">
-              Required
-            </span>
-          </div>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            MN Request Letter
+          </p>
           <p className="text-[11px] text-muted-foreground/80 mt-0.5">
             Generated from the data above — patient name, situation, and check marks
             are filled in automatically. Uploads to Monday so it&apos;s attached when
             you send the request.
           </p>
         </div>
+        {/* Fixed min-width so the button doesn't jump from "Generate" to
+           "Generating…" when its label changes. */}
         <Button
           size="sm"
           onClick={onGenerate}
           disabled={generating}
-          className="h-8 gap-1 text-xs bg-teal-600 hover:bg-teal-700 text-white"
+          className="h-8 gap-1 text-xs bg-teal-600 hover:bg-teal-700 text-white min-w-[120px] justify-center"
         >
           {generating ? (
             <>
