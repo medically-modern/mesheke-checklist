@@ -73,7 +73,7 @@ export function PatientProfileCard({ patient, defaultDoctorOpen = false }: Props
 
       <div className="h-px bg-border" />
 
-      {/* Row 2: Workflow context — left-aligned with row 1 (4-col grid, 3 used) */}
+      {/* Row 2: Workflow context */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Field
           icon={<Stethoscope className="h-4 w-4" />}
@@ -89,6 +89,20 @@ export function PatientProfileCard({ patient, defaultDoctorOpen = false }: Props
           icon={<Stethoscope className="h-4 w-4" />}
           label="Serving"
           value={patient.serving ?? ""}
+        />
+      </div>
+
+      {/* Row 3: Equipment — needed for prescription script generation */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Field
+          icon={<Stethoscope className="h-4 w-4" />}
+          label="CGM Type"
+          value={patient.cgmType ?? ""}
+        />
+        <Field
+          icon={<Stethoscope className="h-4 w-4" />}
+          label="Pump Type"
+          value={patient.pumpType ?? ""}
         />
       </div>
 

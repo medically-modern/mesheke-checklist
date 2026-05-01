@@ -169,6 +169,20 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
   const showCgmGenerate = patient.serving === "CGM" || patient.serving === "Insulin Pump + CGM" || patient.serving === "Supplies + CGM";
   const showIpGenerate = patient.serving !== "CGM";
 
+  // Required fields before triggering DocExport.
+  function missingForScript(kind: "cgm" | "ip"): string[] {
+    const out: string[] = [];
+    if (!patient.name) out.push("Name");
+    if (!patient.dob) out.push("DOB");
+    if (kind === "cgm" && !patient.cgmType) out.push("CGM Type");
+    if (kind === "ip" && !patient.pumpType) out.push("Pump Type");
+    if (!patient.doctorName) out.push("Doctor Name");
+    if (!patient.doctorNpi) out.push("Doctor NPI");
+    return out;
+  }
+  const cgmMissing = missingForScript("cgm");
+  const ipMissing = missingForScript("ip");
+
   const isParachute = patient.clinicalsMethod === "Parachute";
   const [showAdvanced, setShowAdvanced] = useState(!isParachute);
 
@@ -195,6 +209,8 @@ export function SendRequestPanel({ patient, resetVersion = 0 }: Props) {
             cgmFiles={mondayFiles.cgmTemplate}
             ipFiles={mondayFiles.ipTemplate}
             loading={mondayFiles.loading}
+            cgmMissing={cgmMissing}
+            ipMissing={ipMissing}
             onGenerateCgm={() => handleGenerateCgm("Generate")}
             onCancelCgm={() => handleGenerateCgm(undefined)}
             onGenerateIp={() => handleGenerateIp("Generate")}
@@ -292,6 +308,10 @@ function WhatsNeededCard({ patient }: { patient: Patient }) {
   const ip = splitDropdownText(patient.ipMnInvalidReasons);
   const allClean = established && general.length === 0 && cgm.length === 0 && ip.length === 0;
 
+  const serving = patient.serving;
+  const showCgm = serving === "CGM" || serving === "Insulin Pump + CGM" || serving === "Supplies + CGM";
+  const showIp = serving !== "CGM";
+
   return (
     <section className="rounded-xl bg-card border shadow-card p-5 space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -323,8 +343,8 @@ function WhatsNeededCard({ patient }: { patient: Patient }) {
       ) : (
         <div className="space-y-2">
           <ReasonRow label="General" reasons={general} />
-          <ReasonRow label="CGM" reasons={cgm} />
-          <ReasonRow label="Insulin Pump" reasons={ip} />
+          {showCgm && <ReasonRow label="CGM" reasons={cgm} />}
+          {showIp && <ReasonRow label="Insulin Pump" reasons={ip} />}
         </div>
       )}
 
@@ -378,6 +398,8 @@ interface GenerateScriptsCardProps {
   cgmFiles: MondayFileEntry[];
   ipFiles: MondayFileEntry[];
   loading: boolean;
+  cgmMissing: string[];
+  ipMissing: string[];
   onGenerateCgm: () => void;
   onCancelCgm: () => void;
   onGenerateIp: () => void;
@@ -402,6 +424,7 @@ function GenerateScriptsCard(props: GenerateScriptsCardProps) {
             <ToggleRow
               label="Generate CGM Script"
               isGenerating={props.cgmIsGenerating}
+              missing={props.cgmMissing}
               onGenerate={props.onGenerateCgm}
               onCancel={props.onCancelCgm}
             />
@@ -413,6 +436,7 @@ function GenerateScriptsCard(props: GenerateScriptsCardProps) {
             <ToggleRow
               label="Generate Insulin Pump Script"
               isGenerating={props.ipIsGenerating}
+              missing={props.ipMissing}
               onGenerate={props.onGenerateIp}
               onCancel={props.onCancelIp}
             />
@@ -427,14 +451,18 @@ function GenerateScriptsCard(props: GenerateScriptsCardProps) {
 function ToggleRow({
   label,
   isGenerating,
+  missing,
   onGenerate,
   onCancel,
 }: {
   label: string;
   isGenerating: boolean;
+  missing: string[];
   onGenerate: () => void;
   onCancel: () => void;
 }) {
+  const disabled = missing.length > 0;
+  const tooltip = disabled ? `Missing: ${missing.join(", ")}` : undefined;
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 px-2 rounded-md hover:bg-muted/50">
       <span className="text-sm text-muted-foreground whitespace-nowrap">{label}</span>
@@ -449,14 +477,19 @@ function ToggleRow({
           </Button>
         </div>
       ) : (
-        <Button
-          size="sm"
-          onClick={onGenerate}
-          className="h-8 px-3 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-        >
-          <FileText className="h-3 w-3" />
-          Generate
-        </Button>
+        // Wrapper span carries the title so the tooltip works even on the
+        // disabled button (browsers don't fire hover events on disabled).
+        <span title={tooltip} className="inline-block">
+          <Button
+            size="sm"
+            onClick={onGenerate}
+            disabled={disabled}
+            className="h-8 px-3 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-muted disabled:text-muted-foreground"
+          >
+            <FileText className="h-3 w-3" />
+            Generate
+          </Button>
+        </span>
       )}
     </div>
   );
