@@ -50,12 +50,18 @@ export default {
       return new Response("Missing Authorization header", { status: 401, headers });
     }
 
-    // Forward to Monday's file endpoint exactly as received.
+    // Forward to Monday's file endpoint, preserving the multipart Content-Type
+    // (it carries the boundary; without it Monday can't parse the body and
+    // returns 400 with an empty error body).
+    const upstreamHeaders = { Authorization: auth };
+    const ct = request.headers.get("Content-Type");
+    if (ct) upstreamHeaders["Content-Type"] = ct;
+
     let mondayRes;
     try {
       mondayRes = await fetch("https://api.monday.com/v2/file", {
         method: "POST",
-        headers: { Authorization: auth },
+        headers: upstreamHeaders,
         body: request.body,
       });
     } catch (e) {
