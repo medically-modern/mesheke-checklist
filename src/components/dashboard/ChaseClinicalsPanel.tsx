@@ -60,11 +60,15 @@ export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
     setNextAction("");
   }, [patient.id]);
 
-  // Default Next Action Date to today + 2 weekdays whenever the
-  // selected patient changes (the field is always visible now).
+  // Default Next Action Date based on which option is selected:
+  //   No → next weekday (fast follow-up)
+  //   Yes / Parachute message / nothing → 2 weekdays
+  // Re-applies on patient change and on every confirmed change so the
+  // visible default matches the chosen path.
   useEffect(() => {
-    setNextAction(formatDateInput(addBusinessDays(new Date(), 2)));
-  }, [patient.id]);
+    const days = confirmed === "no" ? 1 : 2;
+    setNextAction(formatDateInput(addBusinessDays(new Date(), days)));
+  }, [patient.id, confirmed]);
 
   const currentAttempt = useMemo(() => {
     const v = (patient.mnAttempts || "").trim();
@@ -84,14 +88,10 @@ export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
     return out;
   }, [patient.chaseAttempt1, patient.chaseAttempt2, patient.chaseAttempt3]);
 
-  // The Parachute-message option is its own attempt path that doesn't
-  // require a name (no human conversation, just an outreach via the
-  // portal). For Yes/No we still need a responder name.
-  const canSave =
-    !!confirmed &&
-    !saving &&
-    !isEscalated &&
-    (confirmed === "parachute-message" || !!name.trim());
+  // Name field is never required — agents sometimes don't catch a
+  // name on the call, and the Parachute message path has no human at
+  // all. Save only needs a selected outcome.
+  const canSave = !!confirmed && !saving && !isEscalated;
 
   async function handleSave() {
     if (!canSave) return;
@@ -654,7 +654,8 @@ function parseAttemptValue(attempt: number, raw: string): AttemptChip {
 }
 
 function formatAttemptValue(name: string, date: Date): string {
-  return `${name} — ${formatDateShort(date)}`;
+  const datePart = formatDateShort(date);
+  return name ? `${name} — ${datePart}` : datePart;
 }
 
 function nextMnAttempt(currentAttempt: number): "Attempt 2" | "Attempt 3" | "Escalate" {

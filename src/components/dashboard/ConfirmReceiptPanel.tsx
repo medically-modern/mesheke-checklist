@@ -57,12 +57,14 @@ export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
     setNextAction("");
   }, [patient.id]);
 
-  // Confirm Receipt callbacks usually happen the next business day —
-  // the office tends to look at the fax/email overnight and we ring
-  // back fast. Always pre-populate the field on patient change.
+  // Default Next Action Date based on the picked outcome:
+  //   No  → next weekday (fast follow-up after a confirmed-receipt no)
+  //   Yes / nothing → 2 weekdays
+  // Re-applies on patient change and on every confirmed change.
   useEffect(() => {
-    setNextAction(formatDateInput(addBusinessDays(new Date(), 1)));
-  }, [patient.id]);
+    const days = confirmed === "no" ? 1 : 2;
+    setNextAction(formatDateInput(addBusinessDays(new Date(), days)));
+  }, [patient.id, confirmed]);
 
   // Determine current attempt slot (1, 2, or 3) from MN Attempts column.
   // No value yet → Attempt 1.
@@ -86,7 +88,9 @@ export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
     return out;
   }, [patient.confirmAttempt1, patient.confirmAttempt2, patient.confirmAttempt3]);
 
-  const canSave = !!name.trim() && !!confirmed && !saving && !isEscalated;
+  // Name field is never required — agents sometimes don't catch a
+  // name. Save only needs a selected outcome.
+  const canSave = !!confirmed && !saving && !isEscalated;
 
   async function handleSave() {
     if (!canSave) return;
@@ -656,7 +660,8 @@ function parseAttemptValue(attempt: number, raw: string): AttemptChip {
 }
 
 function formatAttemptValue(name: string, date: Date): string {
-  return `${name} — ${formatDateShort(date)}`;
+  const datePart = formatDateShort(date);
+  return name ? `${name} — ${datePart}` : datePart;
 }
 
 function nextMnAttempt(currentAttempt: number): "Attempt 2" | "Attempt 3" | "Escalate" {
