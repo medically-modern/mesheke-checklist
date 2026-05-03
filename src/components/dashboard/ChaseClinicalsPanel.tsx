@@ -404,7 +404,7 @@ function ActiveAttemptCard({
   name: string;
   onNameChange: (v: string) => void;
   confirmed: "yes" | "no" | "parachute-message" | null;
-  onConfirmedChange: (v: "yes" | "no" | "parachute-message") => void;
+  onConfirmedChange: (v: "yes" | "no" | "parachute-message" | null) => void;
   nextAction: string;
   onNextActionChange: (v: string) => void;
   /** Parachute mode replaces the call + Yes/No flow with a single
@@ -413,6 +413,12 @@ function ActiveAttemptCard({
 }) {
   const isLastAttempt = attemptNumber === totalAttempts;
   const showNextAction = confirmed === "no" || confirmed === "parachute-message";
+
+  // Click-again-to-deselect: tapping the already-selected option clears
+  // the selection so the agent can switch paths or back out before save.
+  const toggle = (v: "yes" | "no" | "parachute-message") => {
+    onConfirmedChange(confirmed === v ? null : v);
+  };
   return (
     <section className="rounded-xl bg-card border shadow-card overflow-hidden">
       <div className="px-5 py-3 border-b bg-muted/30 flex items-center gap-3 flex-wrap">
@@ -449,7 +455,7 @@ function ActiveAttemptCard({
               </label>
               <button
                 type="button"
-                onClick={() => onConfirmedChange("parachute-message")}
+                onClick={() => toggle("parachute-message")}
                 className={`mt-2 w-full rounded-lg border-2 px-4 py-3 flex items-center gap-3 text-sm font-semibold transition-colors text-left ${
                   confirmed === "parachute-message"
                     ? "border-indigo-500 bg-indigo-50 text-indigo-900"
@@ -490,7 +496,7 @@ function ActiveAttemptCard({
           <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => onConfirmedChange("yes")}
+              onClick={() => toggle("yes")}
               className={`rounded-lg border-2 px-4 py-3 flex items-center gap-2 text-sm font-semibold transition-colors text-left ${
                 confirmed === "yes"
                   ? "border-emerald-500 bg-emerald-50 text-emerald-900"
@@ -502,7 +508,7 @@ function ActiveAttemptCard({
             </button>
             <button
               type="button"
-              onClick={() => onConfirmedChange("no")}
+              onClick={() => toggle("no")}
               className={`rounded-lg border-2 px-4 py-3 flex items-center gap-2 text-sm font-semibold transition-colors text-left ${
                 confirmed === "no"
                   ? "border-rose-500 bg-rose-50 text-rose-900"

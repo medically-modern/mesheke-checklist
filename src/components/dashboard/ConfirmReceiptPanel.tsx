@@ -448,11 +448,15 @@ function ActiveAttemptCard({
   name: string;
   onNameChange: (v: string) => void;
   confirmed: "yes" | "no" | null;
-  onConfirmedChange: (v: "yes" | "no") => void;
+  onConfirmedChange: (v: "yes" | "no" | null) => void;
   nextAction: string;
   onNextActionChange: (v: string) => void;
 }) {
   const isLastAttempt = attemptNumber === totalAttempts;
+  // Click-again-to-deselect, same as the Chase panel.
+  const toggle = (v: "yes" | "no") => {
+    onConfirmedChange(confirmed === v ? null : v);
+  };
   return (
     <section className="rounded-xl bg-card border shadow-card overflow-hidden">
       <div className="px-5 py-3 border-b bg-muted/30 flex items-center gap-3 flex-wrap">
@@ -496,7 +500,7 @@ function ActiveAttemptCard({
           <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => onConfirmedChange("yes")}
+              onClick={() => toggle("yes")}
               className={`rounded-lg border-2 px-4 py-3 flex items-center gap-2 text-sm font-semibold transition-colors text-left ${
                 confirmed === "yes"
                   ? "border-emerald-500 bg-emerald-50 text-emerald-900"
@@ -508,7 +512,7 @@ function ActiveAttemptCard({
             </button>
             <button
               type="button"
-              onClick={() => onConfirmedChange("no")}
+              onClick={() => toggle("no")}
               className={`rounded-lg border-2 px-4 py-3 flex items-center gap-2 text-sm font-semibold transition-colors text-left ${
                 confirmed === "no"
                   ? "border-rose-500 bg-rose-50 text-rose-900"
