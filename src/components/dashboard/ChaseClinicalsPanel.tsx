@@ -425,7 +425,7 @@ function ActiveAttemptCard({
             {isLastAttempt
               ? "Final attempt — if clinicals aren't sent, the patient will be flagged for escalation."
               : isParachute
-                ? "Send the doctor's office a message through the Parachute portal to nudge them."
+                ? "Either send a message through the Parachute portal or call the doctor's office — pick one."
                 : "Call the doctor's office to confirm the clinicals are sent."}
           </p>
         </div>
@@ -437,77 +437,83 @@ function ActiveAttemptCard({
       </div>
 
       <div className="p-5 space-y-4">
-        {isParachute ? (
-          // Parachute mode: a single outreach action — send a portal
-          // message, log it as the attempt, schedule a follow-up. No
-          // name input, no Yes/No.
-          <div>
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Outreach
-            </label>
-            <button
-              type="button"
-              onClick={() => onConfirmedChange("parachute-message")}
-              className={`mt-2 w-full rounded-lg border-2 px-4 py-3 flex items-center gap-3 text-sm font-semibold transition-colors text-left ${
-                confirmed === "parachute-message"
-                  ? "border-indigo-500 bg-indigo-50 text-indigo-900"
-                  : "border-border bg-background hover:bg-indigo-50/50 hover:border-indigo-300"
-              }`}
-            >
-              <Send className="h-4 w-4 text-indigo-600" />
-              <span>Sent message on Parachute</span>
-            </button>
-            <p className="text-[11px] text-muted-foreground mt-2">
-              Logs this as Attempt {attemptNumber}. After 3 unsuccessful attempts the patient is flagged for escalation.
-            </p>
-          </div>
-        ) : (
+        {/* Parachute mode shows BOTH options — agents either send a
+            message via the portal OR call the office. The Parachute
+            button is its own selectable mode (no name input); call
+            mode uses the existing name + Yes/No inputs. */}
+        {isParachute && (
           <>
             <div>
               <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Who answered the call?
+                Outreach via Parachute
               </label>
-              <Input
-                value={name}
-                onChange={(e) => onNameChange(e.target.value)}
-                placeholder="Name and title (e.g. Donna, Records)"
-                className="mt-1 h-9 bg-background"
-              />
+              <button
+                type="button"
+                onClick={() => onConfirmedChange("parachute-message")}
+                className={`mt-2 w-full rounded-lg border-2 px-4 py-3 flex items-center gap-3 text-sm font-semibold transition-colors text-left ${
+                  confirmed === "parachute-message"
+                    ? "border-indigo-500 bg-indigo-50 text-indigo-900"
+                    : "border-border bg-background hover:bg-indigo-50/50 hover:border-indigo-300"
+                }`}
+              >
+                <Send className="h-4 w-4 text-indigo-600" />
+                <span>Sent message on Parachute</span>
+              </button>
             </div>
 
-            <div>
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Did they say they will send the clinicals?
-              </label>
-              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => onConfirmedChange("yes")}
-                  className={`rounded-lg border-2 px-4 py-3 flex items-center gap-2 text-sm font-semibold transition-colors text-left ${
-                    confirmed === "yes"
-                      ? "border-emerald-500 bg-emerald-50 text-emerald-900"
-                      : "border-border bg-background hover:bg-emerald-50/50 hover:border-emerald-300"
-                  }`}
-                >
-                  <Check className="h-4 w-4 text-emerald-600" />
-                  <span>Yes — will send</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onConfirmedChange("no")}
-                  className={`rounded-lg border-2 px-4 py-3 flex items-center gap-2 text-sm font-semibold transition-colors text-left ${
-                    confirmed === "no"
-                      ? "border-rose-500 bg-rose-50 text-rose-900"
-                      : "border-border bg-background hover:bg-rose-50/50 hover:border-rose-300"
-                  }`}
-                >
-                  <XCircle className="h-4 w-4 text-rose-600" />
-                  <span>No — still pending</span>
-                </button>
-              </div>
+            <div className="flex items-center gap-3" role="separator" aria-label="or">
+              <span className="flex-1 h-px bg-border" />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                or call instead
+              </span>
+              <span className="flex-1 h-px bg-border" />
             </div>
           </>
         )}
+
+        <div>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Who answered the call?
+          </label>
+          <Input
+            value={name}
+            onChange={(e) => onNameChange(e.target.value)}
+            placeholder="Name and title (e.g. Donna, Records)"
+            className="mt-1 h-9 bg-background"
+          />
+        </div>
+
+        <div>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Did they say they will send the clinicals?
+          </label>
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => onConfirmedChange("yes")}
+              className={`rounded-lg border-2 px-4 py-3 flex items-center gap-2 text-sm font-semibold transition-colors text-left ${
+                confirmed === "yes"
+                  ? "border-emerald-500 bg-emerald-50 text-emerald-900"
+                  : "border-border bg-background hover:bg-emerald-50/50 hover:border-emerald-300"
+              }`}
+            >
+              <Check className="h-4 w-4 text-emerald-600" />
+              <span>Yes — will send</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onConfirmedChange("no")}
+              className={`rounded-lg border-2 px-4 py-3 flex items-center gap-2 text-sm font-semibold transition-colors text-left ${
+                confirmed === "no"
+                  ? "border-rose-500 bg-rose-50 text-rose-900"
+                  : "border-border bg-background hover:bg-rose-50/50 hover:border-rose-300"
+              }`}
+            >
+              <XCircle className="h-4 w-4 text-rose-600" />
+              <span>No — still pending</span>
+            </button>
+          </div>
+        </div>
 
         {showNextAction && (
           <div>
