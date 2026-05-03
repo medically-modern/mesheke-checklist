@@ -135,7 +135,7 @@ const Index = () => {
                   </TabsContent>
 
                   <TabsContent value="chase" className="space-y-5 mt-0">
-                    <PatientProfileCard patient={selected} defaultDoctorOpen />
+                    <PatientProfileCard patient={selected} lockDoctorOpen />
                     <ChaseClinicalsPanel patient={selected} onUpdate={onUpdate} />
                   </TabsContent>
                 </>
