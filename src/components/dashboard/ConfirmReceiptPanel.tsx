@@ -57,12 +57,11 @@ export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
     setNextAction("");
   }, [patient.id]);
 
-  // Default next action to today + 2 weekdays whenever the user picks "No"
+  // Always pre-populate Next Action Date with today + 2 weekdays — the
+  // field is visible regardless of which option is selected.
   useEffect(() => {
-    if (confirmed === "no" && !nextAction) {
-      setNextAction(formatDateInput(addBusinessDays(new Date(), 2)));
-    }
-  }, [confirmed, nextAction]);
+    setNextAction(formatDateInput(addBusinessDays(new Date(), 2)));
+  }, [patient.id]);
 
   // Determine current attempt slot (1, 2, or 3) from MN Attempts column.
   // No value yet → Attempt 1.
@@ -525,23 +524,22 @@ function ActiveAttemptCard({
           </div>
         </div>
 
-        {/* Next action date — only shown when "No" is selected */}
-        {confirmed === "no" && (
-          <div>
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Next action date
-            </label>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Defaults to 2 weekdays from today. Adjust if the office asked for a different callback.
-            </p>
-            <Input
-              type="date"
-              value={nextAction}
-              onChange={(e) => onNextActionChange(e.target.value)}
-              className="mt-1 h-9 bg-background w-full sm:w-56"
-            />
-          </div>
-        )}
+        {/* Next action date — always visible. Pre-populated to today
+            + 2 weekdays. Only written to Monday on a No save. */}
+        <div>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Next action date
+          </label>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Defaults to 2 weekdays from today. Adjust if the office asked for a different callback.
+          </p>
+          <Input
+            type="date"
+            value={nextAction}
+            onChange={(e) => onNextActionChange(e.target.value)}
+            className="mt-1 h-9 bg-background w-full sm:w-56"
+          />
+        </div>
       </div>
     </section>
   );

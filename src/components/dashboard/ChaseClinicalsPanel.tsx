@@ -60,11 +60,11 @@ export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
     setNextAction("");
   }, [patient.id]);
 
+  // Default Next Action Date to today + 2 weekdays whenever the
+  // selected patient changes (the field is always visible now).
   useEffect(() => {
-    if ((confirmed === "no" || confirmed === "parachute-message") && !nextAction) {
-      setNextAction(formatDateInput(addBusinessDays(new Date(), 2)));
-    }
-  }, [confirmed, nextAction]);
+    setNextAction(formatDateInput(addBusinessDays(new Date(), 2)));
+  }, [patient.id]);
 
   const currentAttempt = useMemo(() => {
     const v = (patient.mnAttempts || "").trim();
@@ -412,7 +412,6 @@ function ActiveAttemptCard({
   isParachute?: boolean;
 }) {
   const isLastAttempt = attemptNumber === totalAttempts;
-  const showNextAction = confirmed === "no" || confirmed === "parachute-message";
 
   // Click-again-to-deselect: tapping the already-selected option clears
   // the selection so the agent can switch paths or back out before save.
@@ -521,22 +520,20 @@ function ActiveAttemptCard({
           </div>
         </div>
 
-        {showNextAction && (
-          <div>
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Next action date
-            </label>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Defaults to 2 weekdays from today. Adjust if you want a different follow-up.
-            </p>
-            <Input
-              type="date"
-              value={nextAction}
-              onChange={(e) => onNextActionChange(e.target.value)}
-              className="mt-1 h-9 bg-background w-full sm:w-56"
-            />
-          </div>
-        )}
+        <div>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Next action date
+          </label>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Defaults to 2 weekdays from today. Adjust if you want a different follow-up.
+          </p>
+          <Input
+            type="date"
+            value={nextAction}
+            onChange={(e) => onNextActionChange(e.target.value)}
+            className="mt-1 h-9 bg-background w-full sm:w-56"
+          />
+        </div>
       </div>
     </section>
   );
