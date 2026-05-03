@@ -47,10 +47,13 @@ interface Props {
 export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
   const mondayFiles = useMondayFiles(patient.id);
   const [saving, setSaving] = useState(false);
+  const [parachuteCompleting, setParachuteCompleting] = useState(false);
 
   const [name, setName] = useState("");
   const [confirmed, setConfirmed] = useState<"yes" | "no" | null>(null);
   const [nextAction, setNextAction] = useState<string>("");
+
+  const isParachute = patient.clinicalsMethod === "Parachute";
 
   useEffect(() => {
     setName("");
@@ -83,6 +86,28 @@ export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
   }, [patient.chaseAttempt1, patient.chaseAttempt2, patient.chaseAttempt3]);
 
   const canSave = !!name.trim() && !!confirmed && !saving && !isEscalated;
+
+  // Parachute requests don't require a chase call — the doctor's office
+  // is pinged through the portal. The agent can still log a call below
+  // if they did one, but the quick action is the happy path.
+  async function handleParachuteComplete() {
+    if (!hasToken()) {
+      toast.error("Monday token not configured");
+      return;
+    }
+    setParachuteCompleting(true);
+    try {
+      await saveYes(patient, "Parachute portal");
+      toast.success("Marked complete — clinicals via Parachute");
+      onUpdate({ chaseRecipientName: "Parachute portal", subStage: "Completed" });
+    } catch (e) {
+      toast.error("Save failed", {
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setParachuteCompleting(false);
+    }
+  }
 
   async function handleSave() {
     if (!canSave) return;
@@ -143,6 +168,12 @@ export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
       <ReceiptConfirmedBanner patient={patient} />
       <FilesPanel files={mondayFiles} />
       {history.length > 0 && <HistoryCard history={history} />}
+      {!isEscalated && isParachute && (
+        <ParachuteQuickAction
+          completing={parachuteCompleting}
+          onComplete={handleParachuteComplete}
+        />
+      )}
       {isEscalated ? (
         <EscalatedCard />
       ) : (
@@ -155,6 +186,7 @@ export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
           onConfirmedChange={setConfirmed}
           nextAction={nextAction}
           onNextActionChange={setNextAction}
+          callOptional={isParachute}
         />
       )}
       <NotesCard
@@ -427,6 +459,7 @@ function ActiveAttemptCard({
   onConfirmedChange,
   nextAction,
   onNextActionChange,
+  callOptional,
 }: {
   attemptNumber: number;
   totalAttempts: number;
@@ -436,6 +469,9 @@ function ActiveAttemptCard({
   onConfirmedChange: (v: "yes" | "no") => void;
   nextAction: string;
   onNextActionChange: (v: string) => void;
+  /** When true (Parachute), reword the card subtitle so the agent
+   *  knows the call is a backup option, not the happy path. */
+  callOptional?: boolean;
 }) {
   const isLastAttempt = attemptNumber === totalAttempts;
   return (
@@ -445,11 +481,18 @@ function ActiveAttemptCard({
         <div className="min-w-0">
           <h3 className="text-sm font-semibold leading-tight">
             Attempt {attemptNumber} of {totalAttempts}
+            {callOptional && (
+              <span className="ml-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                (optional for Parachute)
+              </span>
+            )}
           </h3>
           <p className="text-[11px] text-muted-foreground mt-0.5">
             {isLastAttempt
               ? "Final attempt — if clinicals aren't sent, the patient will be flagged for escalation."
-              : "Call the doctor's office to confirm the clinicals are sent."}
+              : callOptional
+                ? "Only fill out if you actually called the doctor's office. Otherwise just hit Mark as Completed above when the clinicals arrive."
+                : "Call the doctor's office to confirm the clinicals are sent."}
           </p>
         </div>
         {isLastAttempt && (
@@ -474,7 +517,7 @@ function ActiveAttemptCard({
 
         <div>
           <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Did they send the clinicals?
+            Did they say they will send the clinicals?
           </label>
           <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
@@ -487,7 +530,7 @@ function ActiveAttemptCard({
               }`}
             >
               <Check className="h-4 w-4 text-emerald-600" />
-              <span>Yes — clinicals on the way</span>
+              <span>Yes — will send</span>
             </button>
             <button
               type="button"
@@ -521,6 +564,49 @@ function ActiveAttemptCard({
           </div>
         )}
       </div>
+    </section>
+  );
+}
+
+function ParachuteQuickAction({
+  completing,
+  onComplete,
+}: {
+  completing: boolean;
+  onComplete: () => void;
+}) {
+  return (
+    <section className="rounded-xl border-2 border-l-4 border-l-indigo-400 border-indigo-200 bg-indigo-50/40 p-5 flex items-start justify-between gap-4 flex-wrap">
+      <div className="min-w-0">
+        <p className="text-xs uppercase tracking-wider text-indigo-700 font-semibold">
+          Parachute — call optional
+        </p>
+        <p className="text-sm text-indigo-900/90 mt-1">
+          Parachute pings the doctor's office through the portal, so a chase call is usually
+          unnecessary. Hit Mark as Completed once the clinicals come back.
+        </p>
+        <p className="text-[11px] text-indigo-700/80 mt-1">
+          You can still log a chase call below — it's optional, not required.
+        </p>
+      </div>
+      <Button
+        size="lg"
+        onClick={onComplete}
+        disabled={completing}
+        className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-elevate min-w-[200px] justify-center"
+      >
+        {completing ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Saving…
+          </>
+        ) : (
+          <>
+            <Check className="h-4 w-4" />
+            Mark as Completed
+          </>
+        )}
+      </Button>
     </section>
   );
 }
