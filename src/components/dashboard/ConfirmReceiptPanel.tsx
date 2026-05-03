@@ -57,10 +57,11 @@ export function ConfirmReceiptPanel({ patient, onUpdate }: Props) {
     setNextAction("");
   }, [patient.id]);
 
-  // Always pre-populate Next Action Date with today + 2 weekdays — the
-  // field is visible regardless of which option is selected.
+  // Confirm Receipt callbacks usually happen the next business day —
+  // the office tends to look at the fax/email overnight and we ring
+  // back fast. Always pre-populate the field on patient change.
   useEffect(() => {
-    setNextAction(formatDateInput(addBusinessDays(new Date(), 2)));
+    setNextAction(formatDateInput(addBusinessDays(new Date(), 1)));
   }, [patient.id]);
 
   // Determine current attempt slot (1, 2, or 3) from MN Attempts column.
@@ -531,7 +532,7 @@ function ActiveAttemptCard({
             Next action date
           </label>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            Defaults to 2 weekdays from today. Adjust if the office asked for a different callback.
+            Defaults to the next weekday. Adjust if the office asked for a different callback.
           </p>
           <Input
             type="date"
