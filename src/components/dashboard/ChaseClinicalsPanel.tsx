@@ -47,10 +47,9 @@ interface Props {
 export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
   const mondayFiles = useMondayFiles(patient.id);
   const [saving, setSaving] = useState(false);
-  const [parachuteCompleting, setParachuteCompleting] = useState(false);
 
   const [name, setName] = useState("");
-  const [confirmed, setConfirmed] = useState<"yes" | "no" | null>(null);
+  const [confirmed, setConfirmed] = useState<"yes" | "no" | "parachute-message" | null>(null);
   const [nextAction, setNextAction] = useState<string>("");
 
   const isParachute = patient.clinicalsMethod === "Parachute";
@@ -62,7 +61,7 @@ export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
   }, [patient.id]);
 
   useEffect(() => {
-    if (confirmed === "no" && !nextAction) {
+    if ((confirmed === "no" || confirmed === "parachute-message") && !nextAction) {
       setNextAction(formatDateInput(addBusinessDays(new Date(), 2)));
     }
   }, [confirmed, nextAction]);
@@ -85,29 +84,14 @@ export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
     return out;
   }, [patient.chaseAttempt1, patient.chaseAttempt2, patient.chaseAttempt3]);
 
-  const canSave = !!name.trim() && !!confirmed && !saving && !isEscalated;
-
-  // Parachute requests don't require a chase call — the doctor's office
-  // is pinged through the portal. The agent can still log a call below
-  // if they did one, but the quick action is the happy path.
-  async function handleParachuteComplete() {
-    if (!hasToken()) {
-      toast.error("Monday token not configured");
-      return;
-    }
-    setParachuteCompleting(true);
-    try {
-      await saveYes(patient, "Parachute portal");
-      toast.success("Marked complete — clinicals via Parachute");
-      onUpdate({ chaseRecipientName: "Parachute portal", subStage: "Completed" });
-    } catch (e) {
-      toast.error("Save failed", {
-        description: e instanceof Error ? e.message : String(e),
-      });
-    } finally {
-      setParachuteCompleting(false);
-    }
-  }
+  // The Parachute-message option is its own attempt path that doesn't
+  // require a name (no human conversation, just an outreach via the
+  // portal). For Yes/No we still need a responder name.
+  const canSave =
+    !!confirmed &&
+    !saving &&
+    !isEscalated &&
+    (confirmed === "parachute-message" || !!name.trim());
 
   async function handleSave() {
     if (!canSave) return;
@@ -126,7 +110,12 @@ export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
         });
       } else {
         const attempt = currentAttempt ?? 1;
-        const value = formatAttemptValue(name.trim(), new Date());
+        // For Parachute-message attempts, the column value records the
+        // outreach instead of a person's name.
+        const value =
+          confirmed === "parachute-message"
+            ? formatAttemptValue("Parachute message", new Date())
+            : formatAttemptValue(name.trim(), new Date());
         const nextSlot = nextMnAttempt(attempt);
         await saveNo({
           patient,
@@ -168,12 +157,6 @@ export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
       <ReceiptConfirmedBanner patient={patient} />
       <FilesPanel files={mondayFiles} />
       {history.length > 0 && <HistoryCard history={history} />}
-      {!isEscalated && isParachute && (
-        <ParachuteQuickAction
-          completing={parachuteCompleting}
-          onComplete={handleParachuteComplete}
-        />
-      )}
       {isEscalated ? (
         <EscalatedCard />
       ) : (
@@ -186,7 +169,7 @@ export function ChaseClinicalsPanel({ patient, onUpdate }: Props) {
           onConfirmedChange={setConfirmed}
           nextAction={nextAction}
           onNextActionChange={setNextAction}
-          callOptional={isParachute}
+          isParachute={isParachute}
         />
       )}
       <NotesCard
@@ -459,21 +442,22 @@ function ActiveAttemptCard({
   onConfirmedChange,
   nextAction,
   onNextActionChange,
-  callOptional,
+  isParachute,
 }: {
   attemptNumber: number;
   totalAttempts: number;
   name: string;
   onNameChange: (v: string) => void;
-  confirmed: "yes" | "no" | null;
-  onConfirmedChange: (v: "yes" | "no") => void;
+  confirmed: "yes" | "no" | "parachute-message" | null;
+  onConfirmedChange: (v: "yes" | "no" | "parachute-message") => void;
   nextAction: string;
   onNextActionChange: (v: string) => void;
-  /** When true (Parachute), reword the card subtitle so the agent
-   *  knows the call is a backup option, not the happy path. */
-  callOptional?: boolean;
+  /** Parachute mode replaces the call + Yes/No flow with a single
+   *  "Sent message on Parachute" outreach action. */
+  isParachute?: boolean;
 }) {
   const isLastAttempt = attemptNumber === totalAttempts;
+  const showNextAction = confirmed === "no" || confirmed === "parachute-message";
   return (
     <section className="rounded-xl bg-card border shadow-card overflow-hidden">
       <div className="px-5 py-3 border-b bg-muted/30 flex items-center gap-3 flex-wrap">
@@ -481,17 +465,12 @@ function ActiveAttemptCard({
         <div className="min-w-0">
           <h3 className="text-sm font-semibold leading-tight">
             Attempt {attemptNumber} of {totalAttempts}
-            {callOptional && (
-              <span className="ml-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                (optional for Parachute)
-              </span>
-            )}
           </h3>
           <p className="text-[11px] text-muted-foreground mt-0.5">
             {isLastAttempt
               ? "Final attempt — if clinicals aren't sent, the patient will be flagged for escalation."
-              : callOptional
-                ? "Only fill out if you actually called the doctor's office. Otherwise just hit Mark as Completed above when the clinicals arrive."
+              : isParachute
+                ? "Send the doctor's office a message through the Parachute portal to nudge them."
                 : "Call the doctor's office to confirm the clinicals are sent."}
           </p>
         </div>
@@ -503,57 +482,85 @@ function ActiveAttemptCard({
       </div>
 
       <div className="p-5 space-y-4">
-        <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Who answered the call?
-          </label>
-          <Input
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-            placeholder="Name and title (e.g. Donna, Records)"
-            className="mt-1 h-9 bg-background"
-          />
-        </div>
-
-        <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Did they say they will send the clinicals?
-          </label>
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {isParachute ? (
+          // Parachute mode: a single outreach action — send a portal
+          // message, log it as the attempt, schedule a follow-up. No
+          // name input, no Yes/No.
+          <div>
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Outreach
+            </label>
             <button
               type="button"
-              onClick={() => onConfirmedChange("yes")}
-              className={`rounded-lg border-2 px-4 py-3 flex items-center gap-2 text-sm font-semibold transition-colors text-left ${
-                confirmed === "yes"
-                  ? "border-emerald-500 bg-emerald-50 text-emerald-900"
-                  : "border-border bg-background hover:bg-emerald-50/50 hover:border-emerald-300"
+              onClick={() => onConfirmedChange("parachute-message")}
+              className={`mt-2 w-full rounded-lg border-2 px-4 py-3 flex items-center gap-3 text-sm font-semibold transition-colors text-left ${
+                confirmed === "parachute-message"
+                  ? "border-indigo-500 bg-indigo-50 text-indigo-900"
+                  : "border-border bg-background hover:bg-indigo-50/50 hover:border-indigo-300"
               }`}
             >
-              <Check className="h-4 w-4 text-emerald-600" />
-              <span>Yes — will send</span>
+              <Send className="h-4 w-4 text-indigo-600" />
+              <span>Sent message on Parachute</span>
             </button>
-            <button
-              type="button"
-              onClick={() => onConfirmedChange("no")}
-              className={`rounded-lg border-2 px-4 py-3 flex items-center gap-2 text-sm font-semibold transition-colors text-left ${
-                confirmed === "no"
-                  ? "border-rose-500 bg-rose-50 text-rose-900"
-                  : "border-border bg-background hover:bg-rose-50/50 hover:border-rose-300"
-              }`}
-            >
-              <XCircle className="h-4 w-4 text-rose-600" />
-              <span>No — still pending</span>
-            </button>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              Logs this as Attempt {attemptNumber}. After 3 unsuccessful attempts the patient is flagged for escalation.
+            </p>
           </div>
-        </div>
+        ) : (
+          <>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Who answered the call?
+              </label>
+              <Input
+                value={name}
+                onChange={(e) => onNameChange(e.target.value)}
+                placeholder="Name and title (e.g. Donna, Records)"
+                className="mt-1 h-9 bg-background"
+              />
+            </div>
 
-        {confirmed === "no" && (
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Did they say they will send the clinicals?
+              </label>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => onConfirmedChange("yes")}
+                  className={`rounded-lg border-2 px-4 py-3 flex items-center gap-2 text-sm font-semibold transition-colors text-left ${
+                    confirmed === "yes"
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-900"
+                      : "border-border bg-background hover:bg-emerald-50/50 hover:border-emerald-300"
+                  }`}
+                >
+                  <Check className="h-4 w-4 text-emerald-600" />
+                  <span>Yes — will send</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onConfirmedChange("no")}
+                  className={`rounded-lg border-2 px-4 py-3 flex items-center gap-2 text-sm font-semibold transition-colors text-left ${
+                    confirmed === "no"
+                      ? "border-rose-500 bg-rose-50 text-rose-900"
+                      : "border-border bg-background hover:bg-rose-50/50 hover:border-rose-300"
+                  }`}
+                >
+                  <XCircle className="h-4 w-4 text-rose-600" />
+                  <span>No — still pending</span>
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {showNextAction && (
           <div>
             <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Next action date
             </label>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Defaults to 2 weekdays from today. Adjust if the office asked for a different callback.
+              Defaults to 2 weekdays from today. Adjust if you want a different follow-up.
             </p>
             <Input
               type="date"
@@ -564,49 +571,6 @@ function ActiveAttemptCard({
           </div>
         )}
       </div>
-    </section>
-  );
-}
-
-function ParachuteQuickAction({
-  completing,
-  onComplete,
-}: {
-  completing: boolean;
-  onComplete: () => void;
-}) {
-  return (
-    <section className="rounded-xl border-2 border-l-4 border-l-indigo-400 border-indigo-200 bg-indigo-50/40 p-5 flex items-start justify-between gap-4 flex-wrap">
-      <div className="min-w-0">
-        <p className="text-xs uppercase tracking-wider text-indigo-700 font-semibold">
-          Parachute — call optional
-        </p>
-        <p className="text-sm text-indigo-900/90 mt-1">
-          Parachute pings the doctor's office through the portal, so a chase call is usually
-          unnecessary. Hit Mark as Completed once the clinicals come back.
-        </p>
-        <p className="text-[11px] text-indigo-700/80 mt-1">
-          You can still log a chase call below — it's optional, not required.
-        </p>
-      </div>
-      <Button
-        size="lg"
-        onClick={onComplete}
-        disabled={completing}
-        className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-elevate min-w-[200px] justify-center"
-      >
-        {completing ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Saving…
-          </>
-        ) : (
-          <>
-            <Check className="h-4 w-4" />
-            Mark as Completed
-          </>
-        )}
-      </Button>
     </section>
   );
 }
@@ -666,17 +630,21 @@ function SaveBar({
   onSave,
 }: {
   attemptNumber: number;
-  confirmed: "yes" | "no" | null;
+  confirmed: "yes" | "no" | "parachute-message" | null;
   canSave: boolean;
   saving: boolean;
   onSave: () => void;
 }) {
-  let hint = "Pick Yes or No to enable save.";
+  let hint = "Pick an option above to enable save.";
   if (confirmed === "yes") hint = "Saves the chase recipient and advances to Completed.";
   else if (confirmed === "no" && attemptNumber < 3)
     hint = `Logs Attempt ${attemptNumber} as unsuccessful and schedules the next callback.`;
   else if (confirmed === "no" && attemptNumber === 3)
     hint = "Logs Attempt 3 as unsuccessful and flags Escalation Required.";
+  else if (confirmed === "parachute-message" && attemptNumber < 3)
+    hint = `Logs the Parachute message as Attempt ${attemptNumber} and schedules the next outreach.`;
+  else if (confirmed === "parachute-message" && attemptNumber === 3)
+    hint = "Logs the Parachute message as Attempt 3 and flags Escalation Required.";
   return (
     <div className="flex flex-col items-center gap-2 pt-1">
       <Button
