@@ -28,13 +28,17 @@ function Field({
   icon,
   label,
   value,
+  className,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
+  /** Tailwind classes added to the outer wrapper — useful for grid
+   *  spans on long values like clinic names. */
+  className?: string;
 }) {
   return (
-    <div className="flex items-start gap-2 min-w-0">
+    <div className={`flex items-start gap-2 min-w-0 ${className ?? ""}`}>
       <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center text-muted-foreground shrink-0">
         {icon}
       </div>
@@ -221,6 +225,10 @@ export function PatientProfileCard({
               icon={<Building2 className="h-4 w-4" />}
               label="Clinic"
               value={patient.clinicName ?? ""}
+              // Clinic names tend to be long — let it span the empty
+              // 4th column on lg + the empty 2nd column on sm so the
+              // value doesn't truncate.
+              className="sm:col-span-2"
             />
           </div>
         )}
