@@ -4,6 +4,7 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -22,6 +23,49 @@ const TAB_LABELS: Record<TabKey, string> = {
   confirmReceipt: "Confirm Receipt",
   chase: "Chase",
 };
+
+// Order of stage groups inside the Evaluate tab sidebar
+const EVALUATE_GROUP_ORDER = [
+  "Evaluate MN",
+  "Send Request",
+  "Confirm Receipt",
+  "Chase Clinicals",
+] as const;
+
+function PatientRow({
+  patient,
+  isActive,
+  collapsed,
+  onSelect,
+}: {
+  patient: Patient;
+  isActive: boolean;
+  collapsed: boolean;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        isActive={isActive}
+        onClick={() => onSelect(patient.id)}
+        className={cn(
+          "flex items-start gap-2 py-2 h-auto",
+          isActive && "bg-sidebar-accent",
+        )}
+      >
+        <User className="h-4 w-4 mt-0.5 shrink-0" />
+        {!collapsed && (
+          <div className="min-w-0 text-left">
+            <p className="text-sm font-medium truncate">{patient.name}</p>
+            <p className="text-[11px] text-muted-foreground truncate">
+              {patient.serving || "—"} · {patient.daysSinceStageStart || "—"}
+            </p>
+          </div>
+        )}
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
 
 interface Props {
   patients: Patient[];
@@ -72,37 +116,58 @@ export function PatientsSidebar({ patients, selectedId, onSelect, loading, error
           </div>
         )}
 
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {patients.map((p) => (
-                <SidebarMenuItem key={p.id}>
-                  <SidebarMenuButton
+        {activeTab === "evaluate" ? (
+          <>
+            {EVALUATE_GROUP_ORDER.map((stage) => {
+              const inStage = patients.filter((p) => (p.subStage ?? "") === stage);
+              if (inStage.length === 0) return null;
+              return (
+                <SidebarGroup key={stage}>
+                  {!collapsed && (
+                    <SidebarGroupLabel className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                      {stage} ({inStage.length})
+                    </SidebarGroupLabel>
+                  )}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {inStage.map((p) => (
+                        <PatientRow
+                          key={p.id}
+                          patient={p}
+                          isActive={selectedId === p.id}
+                          collapsed={collapsed}
+                          onSelect={onSelect}
+                        />
+                      ))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              );
+            })}
+            {!loading && patients.length === 0 && !error && !collapsed && (
+              <p className="px-3 py-4 text-xs text-muted-foreground">No patients in any MN stage.</p>
+            )}
+          </>
+        ) : (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {patients.map((p) => (
+                  <PatientRow
+                    key={p.id}
+                    patient={p}
                     isActive={selectedId === p.id}
-                    onClick={() => onSelect(p.id)}
-                    className={cn(
-                      "flex items-start gap-2 py-2 h-auto",
-                      selectedId === p.id && "bg-sidebar-accent",
-                    )}
-                  >
-                    <User className="h-4 w-4 mt-0.5 shrink-0" />
-                    {!collapsed && (
-                      <div className="min-w-0 text-left">
-                        <p className="text-sm font-medium truncate">{p.name}</p>
-                        <p className="text-[11px] text-muted-foreground truncate">
-                          {p.serving || "—"} · {p.daysSinceStageStart || "—"}
-                        </p>
-                      </div>
-                    )}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-              {!loading && patients.length === 0 && !error && !collapsed && (
-                <p className="px-3 py-4 text-xs text-muted-foreground">No patients in {activeLabel}.</p>
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                    collapsed={collapsed}
+                    onSelect={onSelect}
+                  />
+                ))}
+                {!loading && patients.length === 0 && !error && !collapsed && (
+                  <p className="px-3 py-4 text-xs text-muted-foreground">No patients in {activeLabel}.</p>
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
     </Sidebar>
   );
